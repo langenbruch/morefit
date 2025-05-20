@@ -1,8 +1,7 @@
 # MoreFit
 
-A more optimized rapid and efficient fitting solution for unbinned maximum likelihood fits.
-MoreFit aims to maximally exploit parallelism and relies on automatically optimised compute graphs. 
-MoreFit is described in [arXiv:2505.XXXX](https://arxiv.org/hep-ex/2505.XXXX), please cite the paper if you find it useful.
+MoreFit is a framework for unbinned maximum likelihood fits with focus on parallelism and automatic optimisation. 
+MoreFit is described in [arXiv:2505.12414](https://arxiv.org/abs/2505.12414), please cite the paper if you find it useful.
 
 ## Usage
 MoreFit currently is a header-only library, with the header files located in the `include` directory. 
