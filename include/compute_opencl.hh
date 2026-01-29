@@ -213,6 +213,7 @@ namespace morefit {
     unsigned int nevents_;
     unsigned int nevents_padded_;
     unsigned int nevents_per_workitem_;
+    //int ninputs_;
     std::vector<dimension<evalT>> input_signature_;
     std::vector<dimension<evalT>> output_signature_;
     //opencl handles
@@ -221,6 +222,7 @@ namespace morefit {
     cl_device_id device_;  
     cl_mem device_data_in_;
     cl_mem device_seed_in_;
+    std::vector<cl_mem> device_other_data_in_;
     cl_mem device_data_out_;
     cl_mem device_parameters_;
     cl_mem kahan_result_;
@@ -257,6 +259,9 @@ namespace morefit {
     }
     ~OpenCLBlock()
     {      
+      for (int i=0; i<device_other_data_in_.size(); i++)
+	if (device_other_data_in_.at(i) != nullptr)
+	    clReleaseMemObject(device_other_data_in_.at(i));
       if (device_data_in_)
 	clReleaseMemObject(device_data_in_);
       if (device_data_out_)
@@ -270,6 +275,59 @@ namespace morefit {
       if (program_)
 	clReleaseProgram(program_);
     }
+    virtual bool PrepareOtherDataBuffers(int nbuffers) override
+    {
+      for (int i=0; i<device_other_data_in_.size(); i++)
+	if (device_other_data_in_.at(i) != nullptr)
+	  {
+	    clReleaseMemObject(device_other_data_in_.at(i));
+	    device_other_data_in_.at(i) = nullptr;
+	  }	  
+      device_other_data_in_.resize(nbuffers);
+      for (int i=0; i<nbuffers; i++)
+	device_other_data_in_.at(i) = nullptr;
+      return true;
+    }
+    virtual bool SetupOtherDataBuffer(int idx, unsigned long int nbytes) override
+    {
+      if (idx >= device_other_data_in_.size())
+	{
+	  std::cout << "Trying to setup iout of range input buffer" << std::endl;
+	  assert(0);
+	}
+      if (device_other_data_in_.at(idx))
+	clReleaseMemObject(device_other_data_in_.at(idx));
+      cl_int CL_err = CL_SUCCESS;
+      device_other_data_in_.at(idx) = clCreateBuffer(context_, CL_MEM_READ_ONLY, nbytes, NULL, &CL_err);
+      if (CL_err != CL_SUCCESS)
+	{
+	  std::cout << "Error setting up input buffer: " << CL_err << std::endl;
+	  assert(0);
+	}
+      return true;
+    }
+    virtual bool SetupOtherDataBuffer(int idx, ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) override
+    {
+      if (idx >= device_other_data_in_.size())
+	{
+	  std::cout << "Trying to setup out of range input buffer" << std::endl;
+	  assert(0);
+	}
+      OpenCLBlock<kernelT, evalT>* inputblock = dynamic_cast<OpenCLBlock<kernelT, evalT>*>(input);
+      if (inputblock == NULL)
+	{
+	  std::cout << "Input block needs to be an OpenCLBlock"  << std::endl;
+	  assert(0);
+	}
+      if (device_other_data_in_.at(idx))
+      	clReleaseMemObject(device_other_data_in_.at(idx));
+      if (use_data_in)
+	device_other_data_in_.at(idx) = inputblock->device_other_data_in_.at(idx);//TODO requires same ordering
+      else
+	device_other_data_in_.at(idx) = inputblock->device_data_out_;
+      clRetainMemObject(device_other_data_in_.at(idx));
+      return true;
+    }
     virtual bool SetupInputBuffer(unsigned long int nbytes) override
     {
       if (device_data_in_)
@@ -279,19 +337,6 @@ namespace morefit {
       if (CL_err != CL_SUCCESS)
 	{
 	  std::cout << "Error setting up input buffer: " << CL_err << std::endl;
-	  assert(0);
-	}
-      return true;
-    }
-    virtual bool SetupSeedBuffer(unsigned long int nbytes) override
-    {
-      if (device_seed_in_)
-	clReleaseMemObject(device_seed_in_);
-      cl_int CL_err = CL_SUCCESS;
-      device_seed_in_ = clCreateBuffer(context_, CL_MEM_READ_ONLY, nbytes, NULL, &CL_err);
-      if (CL_err != CL_SUCCESS)
-	{
-	  std::cout << "Error setting up seed buffer: " << CL_err << std::endl;
 	  assert(0);
 	}
       return true;
@@ -311,6 +356,19 @@ namespace morefit {
       else
 	device_data_in_ = inputblock->device_data_out_;
       clRetainMemObject(device_data_in_);
+      return true;
+    }
+    virtual bool SetupSeedBuffer(int idx, unsigned long int nbytes) override
+    {
+      if (device_seed_in_)
+	clReleaseMemObject(device_seed_in_);
+      cl_int CL_err = CL_SUCCESS;
+      device_seed_in_ = clCreateBuffer(context_, CL_MEM_READ_ONLY, nbytes, NULL, &CL_err);
+      if (CL_err != CL_SUCCESS)
+	{
+	  std::cout << "Error setting up seed buffer: " << CL_err << std::endl;
+	  assert(0);
+	}
       return true;
     }
     virtual bool SetupParameterBuffer(unsigned long int nbytes) override
@@ -364,6 +422,17 @@ namespace morefit {
 	}    
       return true;
     }
+    virtual bool CopyToOtherDataBuffer(int idx, const EventVector<kernelT, evalT>& data) override
+    {     
+      cl_int CL_err = CL_SUCCESS;      
+      CL_err = clEnqueueWriteBuffer(queue_, device_other_data_in_.at(idx), CL_TRUE, 0, data.buffer_size(), data.get_data(), 0, NULL, NULL);
+      if (CL_err != CL_SUCCESS)
+	{
+	  std::cout << "Error writing input buffer: " << CL_err << std::endl;
+	  assert(0);
+	}    
+      return true;
+    }
     virtual bool CopyToSeedBuffer(const EventVector<seedT, evalT>& data) override
     {
       cl_int CL_err = CL_SUCCESS;      
@@ -374,7 +443,7 @@ namespace morefit {
 	  assert(0);
 	}    
       return true;
-    }
+    }    
     virtual bool CopyToParameterBuffer(const std::vector<kernelT>& params) override
     {
       cl_int CL_err = CL_SUCCESS;
@@ -423,7 +492,8 @@ namespace morefit {
       return true;
     };
     virtual bool MakeGenerateKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature,
-				    const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) override
+				    const std::vector<std::string>& params, const std::vector<EventVector<kernelT,evalT>*> other_data,
+				    const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) override
     {
       name_ = name;
       nevents_ = nevents;
@@ -560,7 +630,7 @@ namespace morefit {
 	      kernel_code += "    "+output_signature.at(i).get_name() + " = " + min.str() + " + " + delta.str() + "*xoshiro(rnd_state);\n";
 	    }
 	  //evaluate pdf
-	  kernel_code += "    prob = " + graphs.at(0)->get_kernel() + ";\n";      
+	  kernel_code += graphs.at(0)->get_kernel("    prob = ") + ";\n";      
 	  //accept/reject
 	  kernel_code += "    if (maxprob*(xoshiro(rnd_state)) < prob)\n";
 	  kernel_code += "    {\n";
@@ -594,7 +664,7 @@ namespace morefit {
 	      kernel_code += "    "+output_signature.at(i).get_name() + " = " + min.str() + " + " + delta.str() + "*xoshiro(rnd_state);\n";
 	    }
 	  //evaluate pdf
-	  kernel_code += "    prob = " + graphs.at(0)->get_kernel() + ";\n";      
+	  kernel_code += graphs.at(0)->get_kernel("    prob = ") + ";\n";      
 	  //accept/reject
 	  kernel_code += "    if (maxprob*(xoshiro(rnd_state)) < prob)\n";
 	  kernel_code += "    {\n";
@@ -644,7 +714,8 @@ namespace morefit {
       return true;
     }
     virtual bool MakeComputeKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature,
-				   const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) override
+				   const std::vector<std::string>& params, const std::vector<EventVector<kernelT,evalT>*> data,
+				   const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) override
     {
       kahan_summation_ = kahan_summation;
       name_ = name;
@@ -729,8 +800,7 @@ namespace morefit {
 	  //actual kernel calculating the prob
 	  for (unsigned int i=0; i<graphs.size(); i++)
 	    {
-	      kernel_code += std::string("    output[") + (i==0 ? std::string("i") : ("nevents_padded*" + std::to_string(i)+std::string("+i"))) + std::string("] = ");
-	      kernel_code +=  graphs.at(i)->get_kernel(); 
+	      kernel_code +=  graphs.at(i)->get_kernel(std::string("    output[") + (i==0 ? std::string("i") : ("nevents_padded*" + std::to_string(i)+std::string("+i"))) + std::string("] = "));
 	      kernel_code += ";\n";
 	    }
 	  kernel_code += "  }\n";
@@ -756,8 +826,7 @@ namespace morefit {
 	  //actual kernel calculating the prob
 	  for (unsigned int i=0; i<graphs.size(); i++)
 	    {
-	      kernel_code += std::string("output[") + (i==0 ? std::string("idx") : ("nevents_padded*" + std::to_string(i)+std::string("+idx"))) + std::string("] = ");
-	      kernel_code +=  graphs.at(i)->get_kernel(); 
+	      kernel_code +=  graphs.at(i)->get_kernel(std::string("output[") + (i==0 ? std::string("idx") : ("nevents_padded*" + std::to_string(i)+std::string("+idx"))) + std::string("] = "));
 	      kernel_code += ";\n";
 	    }
 	}
@@ -791,16 +860,21 @@ namespace morefit {
 	{
 	  clSetKernelArg(kernel_, 2, sizeof(int), &nevents_per_workitem_);
 	  clSetKernelArg(kernel_, 3, sizeof(cl_mem), (void *)&device_data_in_);
-	  clSetKernelArg(kernel_, 4, sizeof(cl_mem), (void *)&device_data_out_);
+	  for (int i=0; i<device_other_data_in_.size(); i++)
+	    clSetKernelArg(kernel_, 4+i, sizeof(cl_mem), (void *)&device_other_data_in_.at(i));
+	  
+	  clSetKernelArg(kernel_, 4+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_data_out_);
 	  if (params.size() > 0)
-	    clSetKernelArg(kernel_, 5, sizeof(cl_mem), (void *)&device_parameters_);
+	    clSetKernelArg(kernel_, 5+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_parameters_);
 	}
       else
 	{
 	  clSetKernelArg(kernel_, 2, sizeof(cl_mem), (void *)&device_data_in_);
-	  clSetKernelArg(kernel_, 3, sizeof(cl_mem), (void *)&device_data_out_);
+	  for (int i=0; i<device_other_data_in_.size(); i++)
+	    clSetKernelArg(kernel_, 3+i, sizeof(cl_mem), (void *)&device_other_data_in_.at(i));
+	  clSetKernelArg(kernel_, 3+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_data_out_);
 	  if (params.size() > 0)
-	    clSetKernelArg(kernel_, 4, sizeof(cl_mem), (void *)&device_parameters_);
+	    clSetKernelArg(kernel_, 4+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_parameters_);
 	}
       
       kahan_summation_ = kahan_summation;
@@ -893,12 +967,16 @@ namespace morefit {
 	    {
 	      clSetKernelArg(kernel_, 2, sizeof(int), &nevents_per_workitem_);
 	      clSetKernelArg(kernel_, 3, sizeof(cl_mem), (void *)&device_data_in_);
-	      clSetKernelArg(kernel_, 4, sizeof(cl_mem), (void *)&device_data_out_);
+	      for (int i=0; i<device_other_data_in_.size(); i++)
+		clSetKernelArg(kernel_, 4+i, sizeof(cl_mem), (void *)&device_other_data_in_.at(i));
+	      clSetKernelArg(kernel_, 4+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_data_out_);
 	    }
 	  else
 	    {
-	      clSetKernelArg(kernel_, 2, sizeof(cl_mem), (void *)&device_data_in_);
-	      clSetKernelArg(kernel_, 3, sizeof(cl_mem), (void *)&device_data_out_);
+	      clSetKernelArg(kernel_, 2, sizeof(cl_mem), (void *)&device_data_in_);	      
+	      for (int i=0; i<device_other_data_in_.size(); i++)
+		clSetKernelArg(kernel_, 3+i, sizeof(cl_mem), (void *)&device_other_data_in_.at(i));
+	      clSetKernelArg(kernel_, 3+device_other_data_in_.size(), sizeof(cl_mem), (void *)&device_data_out_);
 	    }
 	}
       

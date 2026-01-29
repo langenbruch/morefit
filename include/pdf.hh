@@ -32,7 +32,80 @@ namespace morefit {
     std::vector<dimension<evalT>*> dimensions_;//pointers allow settings to be changed (eg. change min/max) after object (in this case pdf) creation
     std::vector<parameter<evalT>*> parameters_;//pointers allow settings to be changed (eg. fix parameters) after object (in this case pdf) creation
     std::vector<PDF<kernelT, evalT>*> children_;
+    bool has_acceptance_{false};
+    enum acceptance_type {none, histogram, bdt};
+    acceptance_type acceptance_type_{acceptance_type::none};
+    EventVector<kernelT, evalT>* acceptance_vector_{nullptr};
+    std::vector<int> acceptance_bins_;
+    std::vector<dimension<evalT>> acceptance_dims_;
   public:
+    void set_acceptance_bdt(EventVector<kernelT, evalT>& acceptance_vector, int nnodes)
+    {
+      acceptance_dims_.clear();
+      acceptance_dims_.push_back(dimension<evalT>("morefit_eff", 0.0, 1.0));
+      for (int i=0; i<this->dimensions_.size(); i++)
+	{
+	  acceptance_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_from_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	  acceptance_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_to_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	}
+      std::vector<dimension<evalT>*> arg;
+      for (int i=0; i<acceptance_dims_.size(); i++)
+	arg.push_back(&acceptance_dims_.at(i));
+      acceptance_vector.add_dimensions(arg);
+
+      acceptance_vector.resize(nnodes);
+      for (unsigned j=0; j<nnodes; j++)
+	acceptance_vector.operator()(j, 0) = 1.0;//initialisation
+
+      acceptance_vector_ = &acceptance_vector;
+      acceptance_type_ = acceptance_type::bdt;
+    }
+    void set_acceptance_histo(EventVector<kernelT, evalT>& acceptance_vector, std::vector<int> nbins)
+    {
+      int nallbins = 1;
+      for (int i=0; i<nbins.size(); i++)
+	nallbins *= nbins.at(i);
+
+      acceptance_dims_.clear();
+      acceptance_dims_.push_back(dimension<evalT>("morefit_eff", 0.0, 1.0));
+      for (int i=0; i<this->dimensions_.size(); i++)
+	{
+	  acceptance_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_from_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	  acceptance_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_to_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	}
+      std::vector<dimension<evalT>*> arg;
+      for (int i=0; i<acceptance_dims_.size(); i++)
+	arg.push_back(&acceptance_dims_.at(i));
+      acceptance_vector.add_dimensions(arg);
+
+      acceptance_vector.resize(nallbins);
+      for (unsigned j=0; j<nallbins; j++)
+	acceptance_vector.operator()(j, 0) = 1.0;//initialisation
+	
+      //set bin ranges
+      int nbinslocal = 1;
+      int previousnbinslocal = 1;
+      for (int i=0; i<this->dimensions_.size(); i++)
+	{
+	  nbinslocal *= nbins.at(i);
+	  evalT xmin = this->dimensions_.at(i)->get_min();
+	  evalT xmax = this->dimensions_.at(i)->get_max();
+	  evalT dx = (xmax - xmin)/nbins.at(i);
+	  for (int j=0; j<nallbins; j++)//goes over all bins, for each dimension
+	    {
+	      int localidx = j / previousnbinslocal % nbins.at(i);	      
+	      evalT from = localidx*dx + xmin;
+	      evalT to = (localidx+1)*dx + xmin;
+	      acceptance_vector.operator()(j, 2*i + 1) = from;
+	      acceptance_vector.operator()(j, 2*i + 2) = to;
+	    }
+	  previousnbinslocal *= nbins.at(i);
+	}
+      
+      acceptance_vector_ = &acceptance_vector;
+      acceptance_bins_ = nbins;
+      acceptance_type_ = acceptance_type::histogram;
+    }
     unsigned int nparameters()
     {
       return parameters_.size();
@@ -61,6 +134,198 @@ namespace morefit {
     {
       return -1.0;
     }
+    //returns efficiency depending on dimension variables
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> efficiency() const
+    {
+      switch (acceptance_type_) {
+      case acceptance_type::none:
+	return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
+	break;
+      case acceptance_type::histogram:
+	//assumes the eventvector efficiency as first column
+	//need to determine index from dimension variables, in 1D idx = int((x-xmin)/(xmax-xmin)),
+	{
+	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> index_sum_children;
+	  for (unsigned int i=0; i<this->dimensions_.size(); i++)
+	    {
+	      int nbins = 1;
+	      for (unsigned int j=0; j<i; j++)
+		nbins *= acceptance_bins_.at(j);
+	      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> ratio = Prod<kernelT,evalT>(Prod<kernelT,evalT>(Variable<kernelT, evalT>(dimensions_.at(i)->get_name()) - Constant<kernelT,evalT>(dimensions_.at(i)->get_min()),
+														Constant<kernelT,evalT>(1.0/(dimensions_.at(i)->get_max()-dimensions_.at(i)->get_min()))
+														), Constant<kernelT, evalT>(acceptance_bins_.at(i)));
+	      index_sum_children.emplace_back(std::make_unique<ProdNode<kernelT,evalT>>(Constant<kernelT,evalT>(nbins), std::make_unique<FloorNode<kernelT,evalT>>(std::move(ratio))));	    
+	    }
+	  return std::make_unique<EventVectorNode<kernelT,evalT>>(acceptance_vector_, std::make_unique<SumNode<kernelT, evalT>>(std::move(index_sum_children)), 0);
+	}
+      case acceptance_type::bdt:
+	{
+	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > prefactors_theta;
+	  for (int i=0; i<this->dimensions_.size(); i++)
+	    {
+	      std::string name = this->dimensions_.at(i)->get_name();
+	      std::string loop_from_name = this->dimensions_.at(i)->get_from_name() + "_loop";
+	      std::string loop_to_name = this->dimensions_.at(i)->get_to_name() + "_loop";
+	      prefactors_theta.emplace_back(ConditionalLarger<kernelT,evalT>(Variable<kernelT,evalT>(name)-Variable<kernelT,evalT>(loop_from_name),
+									     Constant<kernelT,evalT>(1.0), Constant<kernelT,evalT>(0.0)));
+	      prefactors_theta.emplace_back(ConditionalSmaller<kernelT,evalT>(Variable<kernelT,evalT>(name)-Variable<kernelT,evalT>(loop_to_name),
+									      Constant<kernelT,evalT>(1.0), Constant<kernelT,evalT>(0.0)));
+	    }
+	  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prefactor = std::make_unique<ProdNode<kernelT, evalT>>(std::move(prefactors_theta));
+	  return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
+								 Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(prefactor));
+
+	}
+      default:
+	std::cout << "Acceptance method not implemented." << std::endl;
+	assert(0);
+	break;
+      }
+      return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob_eff() const
+    {
+      switch (acceptance_type_) {
+      case acceptance_type::none:
+	return prob();
+      case acceptance_type::histogram:
+      case acceptance_type::bdt:
+	return std::make_unique<ProdNode<kernelT, evalT>>(std::move(efficiency()), std::move(prob()));
+      default:
+	std::cout << "Acceptance method not implemented." << std::endl;
+	assert(0);	
+      }
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> logprob_eff() const
+    {
+      return std::make_unique<LogNode<kernelT, evalT>>(std::move(prob_eff()));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm_eff() const
+    {
+      switch (acceptance_type_) {
+      case acceptance_type::none:
+	return norm();
+      case acceptance_type::histogram:
+      case acceptance_type::bdt://should be identical to above
+	{
+	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
+	  std::vector<std::string> names;
+	  for (int i=0; i<this->dimensions_.size(); i++)
+	    {
+	      names.push_back(this->dimensions_.at(i)->get_from_name());
+	      replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_from_name()+"_loop"));
+	      names.push_back(this->dimensions_.at(i)->get_to_name());
+	      replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_to_name()+"_loop"));
+	    }
+	  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral()->substitute(names, replacements));
+	  return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
+								 Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(integral));
+	}
+      default:
+	std::cout << "Acceptance method not implemented." << std::endl;
+	assert(0);	
+      }
+    }
+    //only used for plotting!
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral_eff() const
+    {
+      switch (acceptance_type_) {
+      case acceptance_type::none:
+	return definite_integral();
+      case acceptance_type::histogram:
+      case acceptance_type::bdt:
+	//return std::make_unique<ProdNode<kernelT, evalT>>(std::move(efficiency()), std::move(definite_integral()));
+	{
+	  //general approach working for multiple dimensions, but potentially slower
+	  if (true)
+	    {
+	      //make sure that at there is overlap between [from,to] and EventVector boundaries
+	      //TODO, this can be optimized slightly to fail immediately, for this do not use a product but short-circuit instead
+	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > prefactors_theta;
+	      for (int i=0; i<this->dimensions_.size(); i++)
+		{
+		  std::string from_name = this->dimensions_.at(i)->get_from_name();
+		  std::string loop_from_name = from_name + "_loop";
+		  std::string to_name = this->dimensions_.at(i)->get_to_name();
+		  std::string loop_to_name = to_name + "_loop";
+		  //make sure that to > loop_from and from < loop_to
+		  prefactors_theta.emplace_back(ConditionalLarger<kernelT,evalT>(Variable<kernelT,evalT>(to_name)-Variable<kernelT,evalT>(loop_from_name),
+										 Constant<kernelT,evalT>(1.0), Constant<kernelT,evalT>(0.0)));
+		  prefactors_theta.emplace_back(ConditionalSmaller<kernelT,evalT>(Variable<kernelT,evalT>(from_name)-Variable<kernelT,evalT>(loop_to_name),
+										  Constant<kernelT,evalT>(1.0), Constant<kernelT,evalT>(0.0)));
+		}
+	      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prefactor = std::make_unique<ProdNode<kernelT, evalT>>(std::move(prefactors_theta));
+	      //make sure that you only integrate over the overlap between [from, to] and the bin
+	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
+	      std::vector<std::string> names;
+	      for (int i=0; i<this->dimensions_.size(); i++)
+		{
+		  std::string from_name = this->dimensions_.at(i)->get_from_name();
+		  std::string loop_from_name = from_name + "_loop";
+		  std::string to_name = this->dimensions_.at(i)->get_to_name();
+		  std::string loop_to_name = to_name + "_loop";
+		  //the integral will always be [from, to]
+		  //need to change this to [max(from,lowbin), min(to,highbin)]
+		  names.push_back(this->dimensions_.at(i)->get_from_name());
+		  replacements.emplace_back(ConditionalLarger<kernelT,evalT>(Variable<kernelT,evalT>(from_name)-Variable<kernelT,evalT>(loop_from_name),
+									     Variable<kernelT,evalT>(from_name), Variable<kernelT,evalT>(loop_from_name)));
+
+		  names.push_back(this->dimensions_.at(i)->get_to_name());
+		  replacements.emplace_back(ConditionalSmaller<kernelT,evalT>(Variable<kernelT,evalT>(to_name)-Variable<kernelT,evalT>(loop_to_name),
+									      Variable<kernelT,evalT>(to_name), Variable<kernelT,evalT>(loop_to_name)));
+		}
+	      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral()->substitute(names, replacements));
+
+	      return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
+								     Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(prefactor)*std::move(integral));
+
+	    }
+	  else//approximate method valid for 1D only, deactivated for now
+	    {
+	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> index_sum_children;
+	      for (unsigned int i=0; i<this->dimensions_.size(); i++)
+		{
+		  int nbins = 1;
+		  for (unsigned int j=0; j<i+1; j++)
+		    nbins *= acceptance_bins_.at(j);		  
+		  //this assumes 1D, plotting bins much smaller than efficiency histo bins
+		  //->take efficiency constant over plotted bin
+		  //this is to get the proper index in the event vector (even for mmultiple dimensions, should just do the plotting dimensions)
+		  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> ratio = Prod<kernelT,evalT>(Prod<kernelT,evalT>(Constant<kernelT,evalT>(0.5),
+														    Variable<kernelT, evalT>(dimensions_.at(i)->get_from_name())
+														    +Variable<kernelT,evalT>(dimensions_.at(i)->get_to_name()))
+												-Constant<kernelT,evalT>(dimensions_.at(i)->get_min()),
+												Constant<kernelT,evalT>(1.0/(dimensions_.at(i)->get_max()-dimensions_.at(i)->get_min()))
+												);
+		  index_sum_children.emplace_back(std::make_unique<ProdNode<kernelT,evalT>>(Constant<kernelT,evalT>(nbins), std::move(ratio)));	    
+		}
+	      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral());
+	      //this is an approximation as we do not actually loop over all bins
+	      return std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<EventVectorNode<kernelT,evalT>>(acceptance_vector_, std::make_unique<SumNode<kernelT, evalT>>(std::move(index_sum_children)), 0), std::move(integral));
+	    }
+	}
+      default:
+	std::cout << "Acceptance method not implemented." << std::endl;
+	assert(0);
+      }
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral_normalised_eff() const
+    {
+      return definite_integral_eff()/norm_eff();
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> lognorm_eff() const
+    {
+      return std::make_unique<LogNode<kernelT, evalT>>(std::move(norm_eff()));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob_normalised_eff() const
+    {
+      return std::make_unique<ProdNode<kernelT, evalT>>(std::move(prob_eff()), std::make_unique<InvNode<kernelT, evalT>>(std::move(norm_eff())));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> logprob_normalised_eff() const
+    {
+      return std::make_unique<SumNode<kernelT, evalT>>(std::move(logprob_eff()), std::make_unique<NegNode<kernelT, evalT>>(std::move(lognorm_eff())));
+    }    
+    //below all methods without efficiency, these are actually overwritten by derived classes
     //prob, but not normalised
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob() const = 0;
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> logprob() const
@@ -69,29 +334,16 @@ namespace morefit {
     }
     //integral over prob, range [from...to]
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const = 0;
-    //indefinite integral over prob/norm, range [from ... x] 
-    //virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const = 0;
-    //definite integral over prob/norm, range [from ... to], the dimension names are replaced by dimension->get_from_name(), dimension->get_to_name()
+    //definite integral over prob range [from ... to], the dimension names are replaced by dimension->get_from_name(), dimension->get_to_name(), this is used for eg. plotting
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const
     {
       std::cout << "definite integral is not implemented" << std::endl;
       return Constant<kernelT,evalT>(0.0);
     }
-    //const = 0;
-    //definite integral over prob/norm, range [from ... to] 
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> old_definite_integral(const std::vector<std::string>& dimensions, const std::vector<evalT>& from, const std::vector<evalT>& to) const
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral_normalised() const
     {
-      if (dimensions.size() != from.size() || dimensions.size() != to.size())
-	{
-	  std::cout << "Invalid integration boundaries" << std::endl;
-	  assert(0);
-	}
-      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> a = indefinite_integral()->substitute(dimensions, from);
-      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> b = indefinite_integral()->substitute(dimensions, to);
-      return std::make_unique<SumNode<kernelT, evalT>>(std::move(b), std::make_unique<NegNode<kernelT, evalT>>(std::move(a)));
+      return definite_integral()/norm();
     }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> lognorm() const
     {
       return std::make_unique<LogNode<kernelT, evalT>>(std::move(norm()));
@@ -125,13 +377,13 @@ namespace morefit {
 	result.emplace_back(std::move(this->logprob_normalised()->diff(this->parameters_.at(i)->get_name())));
       return result;
     }
-    std::string get_kernel() const
-    {
-      return logprob_normalised()->get_kernel();
-    }
     virtual bool is_extended() const
     {
       return false;
+    }
+    virtual bool has_acceptance() const
+    {
+      return has_acceptance_;
     }
   };
 
@@ -150,22 +402,19 @@ namespace morefit {
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const
     {
-      return Constant<kernelT, evalT>(0.5)*(Erf<kernelT, evalT>((Constant<kernelT, evalT>(to())-Variable<kernelT, evalT>(mu()->get_name()))/(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name())))-Erf<kernelT, evalT>((Constant<kernelT, evalT>(from())-Variable<kernelT, evalT>(mu()->get_name()))/(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name()))));
+      return Constant<kernelT, evalT>(0.5)*(Erf<kernelT, evalT>((Constant<kernelT, evalT>(to())-Variable<kernelT, evalT>(mu()->get_name()))
+								/(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name())))
+					    -Erf<kernelT, evalT>((Constant<kernelT, evalT>(from())-Variable<kernelT, evalT>(mu()->get_name()))
+								 /(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name()))));
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override
-    {
-      return Constant<kernelT, evalT>(0.5)*(Erf<kernelT, evalT>((Variable<kernelT, evalT>(x()->get_name())-Variable<kernelT, evalT>(mu()->get_name()))/(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name()))))/norm();
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
       return Constant<kernelT, evalT>(0.5)*(Erf<kernelT, evalT>((Variable<kernelT, evalT>(x()->get_to_name())-Variable<kernelT, evalT>(mu()->get_name()))
 								/(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name())))
 					    -Erf<kernelT, evalT>((Variable<kernelT, evalT>(x()->get_from_name())-Variable<kernelT, evalT>(mu()->get_name()))
 								 /(Sqrt<kernelT,evalT>(2.0)*Variable<kernelT, evalT>(sigma()->get_name())))
-					    )/norm();	
-    }
+					    );
+    }    
     evalT from() const
     {
       return this->dimensions_.at(0)->get_min();
@@ -193,9 +442,6 @@ namespace morefit {
     }
   };
 
-  
-
-  
   //one-dimensional Crystalball PDF
   template <typename kernelT=double, typename evalT=double> 
   class CrystalballPDF: public PDF<kernelT, evalT> {
@@ -246,46 +492,8 @@ namespace morefit {
       return powint->copy() + gaussint->copy();
       //nb assumption from < (mean-alpha*sigma), to > (mean-alpha*sigma)
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override
-    {
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> A = Pow<kernelT,evalT>(Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-	* Exp<kernelT,evalT>(-0.5*Variable<kernelT,evalT>(alpha()->get_name())*Variable<kernelT,evalT>(alpha()->get_name()));
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> B = Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name())-Variable<kernelT,evalT>(alpha()->get_name());
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> C = Variable<kernelT,evalT>(sigma()->get_name())*B->copy()+Variable<kernelT,evalT>(mu()->get_name());
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> midpoint = Variable<kernelT,evalT>(mu()->get_name())-Variable<kernelT,evalT>(alpha()->get_name())*Variable<kernelT,evalT>(sigma()->get_name());
-
-
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> gaussint = Sqrt<kernelT,evalT>(M_PI/2.0)*Variable<kernelT,evalT>(sigma()->get_name())
-	*(Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-midpoint->copy())/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0)))
-	  -Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-Variable<kernelT, evalT>(x()->get_name()))/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0))));
-
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> powint_tox =  ConditionalUnequal(Variable<kernelT, evalT>(n()->get_name())-1.0,
-											A->copy()*Pow<kernelT,evalT>(Variable<kernelT,evalT>(sigma()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-											*(Pow<kernelT,evalT>(C->copy()-Variable<kernelT, evalT>(x()->get_name()),1.0-Variable<kernelT,evalT>(n()->get_name()))
-											  - Pow<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()),1.0-Variable<kernelT,evalT>(n()->get_name())))
-											/(Variable<kernelT,evalT>(n()->get_name())-1.0),
-											A->copy()*Variable<kernelT,evalT>(sigma()->get_name())
-											*(Log<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()))
-											  - Log<kernelT,evalT>(C->copy()-Variable<kernelT, evalT>(x()->get_name())))
-											);
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> powint_tomidpoint = ConditionalUnequal(Variable<kernelT, evalT>(n()->get_name())-1.0,
-											A->copy()*Pow<kernelT,evalT>(Variable<kernelT,evalT>(sigma()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-											*(Pow<kernelT,evalT>(C->copy()-midpoint->copy(),1.0-Variable<kernelT,evalT>(n()->get_name()))
-											  - Pow<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()),1.0-Variable<kernelT,evalT>(n()->get_name())))
-											/(Variable<kernelT,evalT>(n()->get_name())-1.0),
-											A->copy()*Variable<kernelT,evalT>(sigma()->get_name())
-											*(Log<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()))
-											  - Log<kernelT,evalT>(C->copy()-midpoint->copy()))
-											);
-      return ConditionalLarger(Variable<kernelT, evalT>(x()->get_name())-midpoint->copy(),
-			       powint_tomidpoint->copy()+gaussint->copy(),
-			       powint_tox->copy())/norm();
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
-      //TODO FIXME
       std::unique_ptr<ComputeGraphNode<kernelT,evalT>> A = Pow<kernelT,evalT>(Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
 	* Exp<kernelT,evalT>(-0.5*Variable<kernelT,evalT>(alpha()->get_name())*Variable<kernelT,evalT>(alpha()->get_name()));
       std::unique_ptr<ComputeGraphNode<kernelT,evalT>> B = Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name())-Variable<kernelT,evalT>(alpha()->get_name());
@@ -299,41 +507,6 @@ namespace morefit {
       std::unique_ptr<ComputeGraphNode<kernelT,evalT>> gauss_from_midpoint = Sqrt<kernelT,evalT>(M_PI/2.0)*Variable<kernelT,evalT>(sigma()->get_name())
 	*(Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-midpoint->copy())/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0)))
 	  -Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-Variable<kernelT,evalT>(x()->get_to_name()))/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0))));
-      /*
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> A = Pow<kernelT,evalT>(Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-	* Exp<kernelT,evalT>(-0.5*Variable<kernelT,evalT>(alpha()->get_name())*Variable<kernelT,evalT>(alpha()->get_name()));
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> B = Variable<kernelT,evalT>(n()->get_name())/Variable<kernelT,evalT>(alpha()->get_name())-Variable<kernelT,evalT>(alpha()->get_name());
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> C = Variable<kernelT,evalT>(sigma()->get_name())*B->copy()+Variable<kernelT,evalT>(mu()->get_name());
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> midpoint = Variable<kernelT,evalT>(mu()->get_name())-Variable<kernelT,evalT>(alpha()->get_name())*Variable<kernelT,evalT>(sigma()->get_name());
-
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> gaussint = Sqrt<kernelT,evalT>(M_PI/2.0)*Variable<kernelT,evalT>(sigma()->get_name())
-	*(Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-midpoint->copy())/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0)))
-	  -Erf<kernelT,evalT>((Variable<kernelT,evalT>(mu()->get_name())-Constant<kernelT,evalT>(to()))/(Variable<kernelT,evalT>(sigma()->get_name())*sqrt(2.0))));
-      
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> powint =  ConditionalUnequal(Variable<kernelT, evalT>(n()->get_name())-1.0,
-										    A->copy()*Pow<kernelT,evalT>(Variable<kernelT,evalT>(sigma()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-										    *(Pow<kernelT,evalT>(C->copy()-midpoint->copy(),1.0-Variable<kernelT,evalT>(n()->get_name()))
-										      - Pow<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()),1.0-Variable<kernelT,evalT>(n()->get_name())))
-										    /(Variable<kernelT,evalT>(n()->get_name())-1.0),
-										    A->copy()*Variable<kernelT,evalT>(sigma()->get_name())
-										    *(Log<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()))
-										      - Log<kernelT,evalT>(C->copy()-midpoint->copy()))
-										    );
-      return powint->copy() + gaussint->copy();
-
-       */
-
-      /*
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> powint =  ConditionalUnequal(Variable<kernelT, evalT>(n()->get_name())-1.0,
-										    A->copy()*Pow<kernelT,evalT>(Variable<kernelT,evalT>(sigma()->get_name()), Variable<kernelT,evalT>(n()->get_name()))
-										    *(Pow<kernelT,evalT>(C->copy()-midpoint->copy(),1.0-Variable<kernelT,evalT>(n()->get_name()))
-										      - Pow<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()),1.0-Variable<kernelT,evalT>(n()->get_name())))
-										    /(Variable<kernelT,evalT>(n()->get_name())-1.0),
-										    A->copy()*Variable<kernelT,evalT>(sigma()->get_name())
-										    *(Log<kernelT,evalT>(C->copy()-Constant<kernelT,evalT>(from()))
-										      - Log<kernelT,evalT>(C->copy()-midpoint->copy()))
-										    );
-      */
       
       std::unique_ptr<ComputeGraphNode<kernelT,evalT>> powint =
 	ConditionalUnequal(Variable<kernelT, evalT>(n()->get_name())-1.0,
@@ -361,7 +534,7 @@ namespace morefit {
 				ConditionalLarger(Variable<kernelT, evalT>(x()->get_from_name())-midpoint->copy(),
 						  gaussint->copy(),//only upper gauss
 						  powint_to_midpoint->copy() + gauss_from_midpoint->copy())//from is lower tail, to is upper gauss
-				)/norm();
+				);
     }
     evalT from() const
     {
@@ -436,23 +609,17 @@ namespace morefit {
     {
       return ConditionalEqual(Variable<kernelT, evalT>(alpha()->get_name()),
 			      Constant<kernelT, evalT>(to()-from()),
-			      (Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Constant<kernelT, evalT>(to()))-Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Constant<kernelT, evalT>(from())))/Variable<kernelT, evalT>(alpha()->get_name()));
+			      (Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Constant<kernelT, evalT>(to()))
+			       -Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Constant<kernelT, evalT>(from())))
+			      /Variable<kernelT, evalT>(alpha()->get_name()));
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override
-    {
-      return ConditionalEqual(Variable<kernelT, evalT>(alpha()->get_name()),
-			      Variable<kernelT, evalT>(x()->get_name())/norm(),
-			      Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Variable<kernelT, evalT>(x()->get_name()))/(Variable<kernelT, evalT>(alpha()->get_name())*norm()));
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
       return ConditionalEqual(Variable<kernelT, evalT>(alpha()->get_name()),
-			      (Variable<kernelT, evalT>(x()->get_to_name())-Variable<kernelT, evalT>(x()->get_from_name()))/norm(),
+			      (Variable<kernelT, evalT>(x()->get_to_name())-Variable<kernelT, evalT>(x()->get_from_name())),
 			      (Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Variable<kernelT, evalT>(x()->get_to_name()))
 			       -Exp<kernelT, evalT>(Variable<kernelT, evalT>(alpha()->get_name())*Variable<kernelT, evalT>(x()->get_from_name())))
-			      /(Variable<kernelT, evalT>(alpha()->get_name())*norm())
+			      /(Variable<kernelT, evalT>(alpha()->get_name()))
 			      );
     }
     dimension<evalT>* x() const
@@ -556,37 +723,6 @@ namespace morefit {
     {
       return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override 
-    {
-      if (!extended_)
-	{
-	  //we add pdfs, these should be normalised
-	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> args;
-	  for (unsigned int i=0; i<this->children_.size()-1; i++)
-	    args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(fractions().at(i)->get_name()),this->children_.at(i)->indefinite_integral()));      
-	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> sum_args;
-	  //last factor is (1-sum_i f_i) * lastchild
-	  sum_args.emplace_back(std::make_unique<ConstantNode<kernelT, evalT>>(1.0));
-	  for (unsigned int i=0; i<this->parameters_.size(); i++)
-	    sum_args.emplace_back(std::make_unique<NegNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(this->parameters_.at(i)->get_name())));      
-	  args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<SumNode<kernelT, evalT>>(std::move(sum_args)), this->children_.at(this->children_.size()-1)->indefinite_integral()));
-	  return std::make_unique<SumNode<kernelT, evalT>>(std::move(args));
-	}
-      else
-	{
-	  //arguments for sum of all yields
-	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> sum_args;
-	  for (unsigned int i=0; i<this->parameters_.size(); i++)
-	    sum_args.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->parameters_.at(i)->get_name()));
-	  //loop over all children 
-	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> args;
-	  for (unsigned int i=0; i<this->children_.size(); i++)
-	    args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(this->parameters_.at(i)->get_name()), this->children_.at(i)->indefinite_integral()));
-	  return std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<SumNode<kernelT, evalT>>(std::move(args)),std::make_unique<InvNode<kernelT, evalT>>(std::make_unique<SumNode<kernelT, evalT>>(std::move(sum_args))));
-	}
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
       if (!extended_)
@@ -594,13 +730,13 @@ namespace morefit {
 	  //we add pdfs, these should be normalised
 	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> args;
 	  for (unsigned int i=0; i<this->children_.size()-1; i++)
-	    args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(fractions().at(i)->get_name()),this->children_.at(i)->definite_integral()));
+	    args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(fractions().at(i)->get_name()),this->children_.at(i)->definite_integral_normalised()));//was not normalised before? TODO fixme
 	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> sum_args;
 	  //last factor is (1-sum_i f_i) * lastchild
 	  sum_args.emplace_back(std::make_unique<ConstantNode<kernelT, evalT>>(1.0));
 	  for (unsigned int i=0; i<this->parameters_.size(); i++)
 	    sum_args.emplace_back(std::make_unique<NegNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(this->parameters_.at(i)->get_name())));
-	  args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<SumNode<kernelT, evalT>>(std::move(sum_args)), this->children_.at(this->children_.size()-1)->definite_integral()));
+	  args.emplace_back(std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<SumNode<kernelT, evalT>>(std::move(sum_args)), this->children_.at(this->children_.size()-1)->definite_integral_normalised()));//was not normalised before? TODO fixme
 	  return std::make_unique<SumNode<kernelT, evalT>>(std::move(args));
 	}
       else
@@ -687,15 +823,6 @@ namespace morefit {
     {
       return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override
-    {
-      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> args;
-      for (unsigned int i=0; i<this->children_.size(); i++)
-	args.emplace_back(this->children_.at(i)->indefinite_integral());
-      return std::make_unique<ProdNode<kernelT, evalT>>(std::move(args));
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
       std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> args;
@@ -752,18 +879,6 @@ namespace morefit {
       return Sum<kernelT,evalT>(std::move(poly_max),Neg<kernelT,evalT>(std::move(poly_min)));
 
     }
-    /*
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> indefinite_integral() const override
-    {
-      //horner method
-      std::unique_ptr<ComputeGraphNode<kernelT,evalT>> poly = Prod<kernelT,evalT>(Constant<kernelT,evalT>(1.0/evalT(coefficients().size()+1)), Variable<kernelT,evalT>(coefficients().at(coefficients().size()-1)->get_name()));
-      for (int i=1; i<coefficients().size(); i++)
-	poly = Sum<kernelT,evalT>(Prod<kernelT, evalT>(std::move(poly), Variable<kernelT,evalT>(x()->get_name())),
-				  Prod<kernelT,evalT>(Constant<kernelT,evalT>(1.0/evalT(coefficients().size()+1-i)), Variable<kernelT,evalT>(coefficients().at(coefficients().size()-i-1)->get_name())));
-      poly = Sum<kernelT,evalT>(Prod<kernelT,evalT>(std::move(poly), Variable<kernelT,evalT>(x()->get_name())), Constant<kernelT,evalT>(1.0));
-      return Prod<kernelT,evalT>(std::move(poly), Variable<kernelT,evalT>(x()->get_name()))/norm();
-    }
-    */
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override
     {
       //horner method
@@ -777,8 +892,8 @@ namespace morefit {
 	poly_to = Sum<kernelT,evalT>(Prod<kernelT, evalT>(std::move(poly_to), Variable<kernelT,evalT>(x()->get_to_name())),
 				  Prod<kernelT,evalT>(Constant<kernelT,evalT>(1.0/evalT(coefficients().size()+1-i)), Variable<kernelT,evalT>(coefficients().at(coefficients().size()-i-1)->get_name())));
       poly_to = Sum<kernelT,evalT>(Prod<kernelT,evalT>(std::move(poly_to), Variable<kernelT,evalT>(x()->get_to_name())), Constant<kernelT,evalT>(1.0));
-      return (Prod<kernelT,evalT>(std::move(poly_to), Variable<kernelT,evalT>(x()->get_to_name()))
-	      -Prod<kernelT,evalT>(std::move(poly_from), Variable<kernelT,evalT>(x()->get_from_name())))/norm();
+      return Prod<kernelT,evalT>(std::move(poly_to), Variable<kernelT,evalT>(x()->get_to_name()))
+	      -Prod<kernelT,evalT>(std::move(poly_from), Variable<kernelT,evalT>(x()->get_from_name()));
     }
     dimension<evalT>* x() const
     {
@@ -843,7 +958,6 @@ namespace morefit {
 	  Eigen::VectorX<std::complex<evalT>> eigenvalues = eigensolver.eigenvalues();
 	  std::cout << "eigenvalues " << eigenvalues << std::endl;
 	}
-      
       //check maximum for all extrema (and limits)
       //unnormalised prob evaluation
       std::function<evalT(evalT)> probx = [&](evalT x) {

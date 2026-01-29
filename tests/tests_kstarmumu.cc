@@ -230,5 +230,73 @@ int main()
       std::cout << std::endl;
 
     }
+
+  //check plotting with efficiencies
+  if (true)
+    {      
+      morefit::EventVector<kernelT, evalT> eff;
+      unsigned int nctlbins = 100;      
+      unsigned int nctkbins = 100;      
+      unsigned int nphibins = 100;      
+      kstarmumu.set_acceptance_histo(eff, {nctlbins, nctkbins, nphibins});
+      
+      for (unsigned int i=0; i<nctlbins*nctkbins*nphibins; i++)
+	{
+	  double ctl_ = 0.5*(eff(i,1) + eff(i,2));
+	  double ctk_ = 0.5*(eff(i,3) + eff(i,4));
+	  double phi_ = 0.5*(eff(i,5) + eff(i,6));
+	    
+	  double eff_ = (1.0+0.2*sin(0.5*(ctl_+1.0)*2.0*M_PI*4)*0.5)/1.2
+	    *(1.0-0.1*cos(0.5*(ctk_+1.0)*2.0*M_PI*6))/1.1
+	    *(1.0+0.3*sin(phi_*10.0))/1.3;
+	  
+	  eff(i, 0) = eff_;
+	}      
+      unsigned int ngen = 1000000;
+      std::cout <<"generating" << std::endl;
+      morefit::generator_options gen_opts;
+      
+      morefit::generator<kernelT, evalT, backendT, blockT> gen(&gen_opts, &backend, &rnd);
+      morefit::EventVector<kernelT, evalT> result({&ctl, &ctk, &phi}, ngen);  
+      gen.generate(ngen, &kstarmumu, params, result);      
+      
+      std::cout <<"fitting" << std::endl;      
+      morefit::fitter_options opts;
+      opts.minuit_printlevel = 2;
+      //opts.analytic_gradient = true;
+      //opts.analytic_hessian = true;
+      opts.analytic_gradient = false;
+      opts.analytic_hessian = false;
+
+      opts.parallelize_loops = true;
+      //opts.parallelize_loops = false;
+
+      opts.print();
+      morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
+      fit.fit(&kstarmumu, params, &result);
+
+      
+      morefit::plotter_options plot_opts;
+      //plot_opts.plotter = morefit::plotter_options::plotter_type::MatPlotLib;
+      plot_opts.plotter = morefit::plotter_options::plotter_type::Root;
+      plot_opts.print_level = 2;
+      plot_opts.plot_pulls = true;
+      //plot_opts.pull_fraction = 0.25;
+      morefit::plotter<kernelT,evalT, backendT, blockT> plot(&plot_opts, &backend);
+      plot.plot(&kstarmumu, params, &result, "ctl", "plot_ctl.eps", "eps", 100);
+      plot.plot(&kstarmumu, params, &result, "ctk", "plot_ctk.eps", "eps", 100);
+      plot.plot(&kstarmumu, params, &result, "phi", "plot_phi.eps", "eps", 100);
+      
+      
+      std::vector<std::string> param_names;
+      for (unsigned int i=0; i<params.size(); i++)
+	param_names.push_back(params.at(i)->get_name());
+      std::vector<double> param_values;
+      for (unsigned int i=0; i<params.size(); i++)
+	param_values.push_back(params.at(i)->get_value());
+      
+      return 0;
+    }
+  
   return 0;
 }

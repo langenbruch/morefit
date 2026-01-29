@@ -17,8 +17,8 @@
 #include <memory>
 #include <array>
 
-#include "graph.hh"
 #include "eventvector.hh"
+#include "graph.hh"
 #include "parametervector.hh"
 #include "pdf.hh"
 #include "physicspdfs.hh"

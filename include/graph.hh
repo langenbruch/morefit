@@ -19,8 +19,9 @@
 #include <math.h>
 #include <fstream>
 
-#include "parametervector.hh"
+//#include "parametervector.hh"
 #include "morefit.hh"
+#include "eventvector.hh"
 
 namespace morefit {
 
@@ -89,7 +90,15 @@ namespace morefit {
   class AtanNode;
   template <typename kernelT, typename evalT> 
   class ErfNode;
+  template <typename kernelT, typename evalT> 
+  class EventVectorNode;
+  template <typename kernelT, typename evalT> 
+  class LoopAndSumNode;
+  template <typename kernelT, typename evalT> 
+  class FloorNode;
 
+
+  
   template<typename kernelT, typename evalT>
   class ComputeGraphNode {
   public:
@@ -122,6 +131,21 @@ namespace morefit {
       for (unsigned int i=0; i<children_.size(); i++)
 	children_.at(i)->rename_variable(variable, new_name);
     }
+    //get kernel, allows for multiple lines/temporary variables/loops
+    //output location can be set via prefix,
+    //lines is a reference to an array of strings where the kernel is built,
+    //current index is the current output index (counted backwards from last line) which allows for nested loops
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const = 0;
+    //get string used in kernel
+    virtual std::string get_kernel(std::string prefix) const
+    {
+      std::vector<std::string> lines;
+      this->get_kernel(prefix, lines);
+      std::string result;
+      for (unsigned int i=0; i<lines.size(); i++)
+	result += lines.at(i);
+      return result;
+    }
     //get string used in kernel
     virtual std::string get_kernel() const = 0;
     //pretty-print compute graph to stdout
@@ -130,6 +154,8 @@ namespace morefit {
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> diff(std::string variable) const = 0;
     //substitute named variables (can be dimensions/parameters) with constants    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const = 0;    
+    //substitute named variables (can be dimensions/parameters) with expressions
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const = 0;    
     //perform rudimentary simplifications
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const = 0;
     //approximate cost of evaluation
@@ -162,6 +188,36 @@ namespace morefit {
 	  std::cout << "Unknown eval type" << std::endl;
 	  assert(0);
 	}
+    }
+    //collect all EventVectors in tree, these need to be given as arguments to the compute block
+    virtual int collect_event_vector_pointers(std::vector<EventVector<kernelT,evalT>*>& result)
+    {
+      EventVectorNode<kernelT, evalT>* ev_node = dynamic_cast<EventVectorNode<kernelT,evalT>*>(this);//needed for efficiency calculation
+      if (ev_node != nullptr)
+	{
+	  bool found = false;
+	  for (unsigned int i=0; i<result.size(); i++)
+	    if (result.at(i)->get_name() == ev_node->get_events()->get_name())
+	      found = true;
+	  if (!found)
+	    result.push_back(ev_node->get_events());
+	}
+      else
+	{
+	  LoopAndSumNode<kernelT, evalT>* las_node = dynamic_cast<LoopAndSumNode<kernelT, evalT>*>(this);//needed for normalisation
+	  if (las_node != nullptr)
+	    {
+	      bool found = false;
+	      for (unsigned int i=0; i<result.size(); i++)
+		if (result.at(i)->get_name() == las_node->get_events()->get_name())
+		  found = true;
+	      if (!found)
+		result.push_back(las_node->get_events());
+	    }
+	}
+      for (unsigned int i=0; i<children_.size(); i++)
+	children_.at(i)->collect_event_vector_pointers(result);
+      return result.size();
     }
     //check if tree contains given variable, simplifies differentiation
     virtual bool variable_in_tree(const std::string& variable) const
@@ -242,6 +298,23 @@ namespace morefit {
     {
       return std::make_unique<ConstantNode<kernelT, evalT>>(number_);
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {
+      const bool hexfloat = false;
+      std::stringstream str;
+      if (hexfloat)
+	str << std::hexfloat << number_;
+      else
+	str << std::scientific << std::setprecision(15) << number_;
+      std::string result = str.str();
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }
     virtual std::string get_kernel() const override
     {
       const bool hexfloat = false;
@@ -261,6 +334,10 @@ namespace morefit {
       std::cout << std::string(level,'\t') << "ConstantNode: " << number_ << std::endl;
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<ConstantNode<kernelT, evalT>>(number_);
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<ConstantNode<kernelT, evalT>>(number_);
     }
@@ -311,6 +388,19 @@ namespace morefit {
     {
       return std::make_unique<SumNode<kernelT, evalT>>(std::move(this->copy_children()));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override
+    {
+      std::string result = "(";
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	result += this->children_.at(i)->get_kernel("", lines) + (i == this->children_.size()-1 ? ")" : "+");
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {
       std::string result = "(";
@@ -328,6 +418,13 @@ namespace morefit {
       return std::make_unique<SumNode<kernelT, evalT>>(std::move(reschildren)); 
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {      
+      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	reschildren.emplace_back(std::move(this->children_.at(i)->substitute(variables, values)));      
+      return std::make_unique<SumNode<kernelT, evalT>>(std::move(reschildren));      
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {      
       std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
       for (unsigned int i=0; i<this->children_.size(); i++)
@@ -545,6 +642,19 @@ namespace morefit {
     {
       return std::make_unique<ProdNode<kernelT, evalT>>(std::move(this->copy_children()));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override
+    {
+      std::string result = "(";
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	result += this->children_.at(i)->get_kernel("", lines) + (i == this->children_.size()-1 ? ")" : "*");
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }        
     virtual std::string get_kernel() const override
     {
       std::string result = "(";
@@ -570,6 +680,13 @@ namespace morefit {
       return std::make_unique<SumNode<kernelT, evalT>>(std::move(products));
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {      
+      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	reschildren.emplace_back(std::move(this->children_.at(i)->substitute(variables, values)));      
+      return std::make_unique<ProdNode<kernelT, evalT>>(std::move(reschildren));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {      
       std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
       for (unsigned int i=0; i<this->children_.size(); i++)
@@ -781,6 +898,17 @@ namespace morefit {
     {
       return std::make_unique<ExpNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {
+      std::string result = "exp(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }
     virtual std::string get_kernel() const override
     {      
       return "exp(" + this->children_.at(0)->get_kernel() + ")";
@@ -795,6 +923,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(std::move(reschildren));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<ExpNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<ExpNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -881,6 +1013,17 @@ namespace morefit {
     {
       return std::make_unique<InvNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "1.0/(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "1.0/(" + this->children_.at(0)->get_kernel() + ")";
@@ -896,6 +1039,10 @@ namespace morefit {
       return std::make_unique<NegNode<kernelT, evalT>>(std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(invsq))));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<InvNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<InvNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -982,6 +1129,17 @@ namespace morefit {
     {
       return std::make_unique<LogNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "log(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "log(" + this->children_.at(0)->get_kernel() + ")";
@@ -996,6 +1154,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<LogNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<LogNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1089,6 +1251,21 @@ namespace morefit {
     {
       return std::make_unique<PowNode<kernelT, evalT>>(std::move(this->copy_children()));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {
+      std::string result = "pow(";
+      result += this->children_.at(0)->get_kernel("", lines);
+      result += ",";
+      result += this->children_.at(1)->get_kernel("", lines);
+      result += ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }      
     virtual std::string get_kernel() const override
     {
       std::string result = "pow(";
@@ -1149,6 +1326,13 @@ namespace morefit {
 	}
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {      
+      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	reschildren.emplace_back(std::move(this->children_.at(i)->substitute(variables, values)));      
+      return std::make_unique<PowNode<kernelT, evalT>>(std::move(reschildren));      
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {      
       std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> reschildren;
       for (unsigned int i=0; i<this->children_.size(); i++)
@@ -1248,6 +1432,17 @@ namespace morefit {
     {
       return std::make_unique<NegNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "-(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }          
     virtual std::string get_kernel() const override
     {      
       return "-(" + this->children_.at(0)->get_kernel() + ")";
@@ -1259,6 +1454,10 @@ namespace morefit {
       return std::make_unique<NegNode<kernelT, evalT>>(this->children_.at(0)->diff(variable));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<NegNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<NegNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1345,6 +1544,17 @@ namespace morefit {
     {
       return std::make_unique<SqrtNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "sqrt(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "sqrt(" + this->children_.at(0)->get_kernel() + ")";
@@ -1359,6 +1569,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(std::move(inner), std::move(outer));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<SqrtNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<SqrtNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1446,6 +1660,17 @@ namespace morefit {
     {
       return std::make_unique<SinNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "sin(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "sin(" + this->children_.at(0)->get_kernel() + ")";
@@ -1460,6 +1685,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<SinNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<SinNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1547,6 +1776,17 @@ namespace morefit {
     {
       return std::make_unique<AsinNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "asin(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "asin(" + this->children_.at(0)->get_kernel() + ")";
@@ -1564,6 +1804,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<AsinNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<AsinNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1650,6 +1894,17 @@ namespace morefit {
     {
       return std::make_unique<CosNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "cos(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "cos(" + this->children_.at(0)->get_kernel() + ")";
@@ -1664,6 +1919,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<CosNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<CosNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1751,6 +2010,17 @@ namespace morefit {
     {
       return std::make_unique<AcosNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "acos(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "acos(" + this->children_.at(0)->get_kernel() + ")";
@@ -1768,6 +2038,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<AcosNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<AcosNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1857,6 +2131,17 @@ namespace morefit {
     {
       return std::make_unique<TanNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "tan(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "tan(" + this->children_.at(0)->get_kernel() + ")";
@@ -1873,6 +2158,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<TanNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<TanNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -1960,6 +2249,17 @@ namespace morefit {
     {
       return std::make_unique<AtanNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "atan(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "atan(" + this->children_.at(0)->get_kernel() + ")";
@@ -1974,6 +2274,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<AtanNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<AtanNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -2060,6 +2364,17 @@ namespace morefit {
     {
       return std::make_unique<ErfNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {      
+      std::string result = "erf(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {      
       return "erf(" + this->children_.at(0)->get_kernel() + ")";
@@ -2078,6 +2393,10 @@ namespace morefit {
       return std::make_unique<ProdNode<kernelT, evalT>>(make_vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>(std::move(inner), std::move(outer)));
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<ErfNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       return std::make_unique<ErfNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
     }
@@ -2168,6 +2487,17 @@ namespace morefit {
       if (name_ == variable)
 	name_ = new_name;
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override
+    {
+      std::string result = name_;
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
     virtual std::string get_kernel() const override
     {
       return name_;
@@ -2189,6 +2519,17 @@ namespace morefit {
 	{
 	  unsigned int var_idx = std::distance(variables.begin(), it);
 	  return std::make_unique<ConstantNode<kernelT, evalT>>(values.at(var_idx));
+	}
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
+    {
+      auto it = std::find(variables.begin(), variables.end(), name_);
+      if (it == variables.end())
+	return this->copy();
+      else
+	{
+	  unsigned int var_idx = std::distance(variables.begin(), it);
+	  return values.at(var_idx)->copy();
 	}
     }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const override
@@ -2267,6 +2608,33 @@ namespace morefit {
     {
       return std::make_unique<ConditionalNode<kernelT, evalT>>(this->comparator_,  std::move(this->children_.at(0)->copy()), std::move(this->children_.at(1)->copy()), std::move(this->children_.at(2)->copy()));
     }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {
+      std::string result = "((";
+      result += this->children_.at(0)->get_kernel("", lines);
+      switch (comparator_) {
+      case comparator_type::Equal: result += "==0.0) ? "; break;
+      case comparator_type::Unequal: result += "!=0.0) ? "; break;
+      case comparator_type::Larger: result += ">0.0) ? "; break;
+      case comparator_type::Smaller: result += "<0.0) ? "; break;
+      case comparator_type::LargerEqual: result += ">=0.0) ? "; break;
+      case comparator_type::SmallerEqual: result += "<=0.0) ? "; break;
+      default:
+	std::cout << "Unknown comparator type" << std::endl;
+	assert(0);
+      }
+      result += this->children_.at(1)->get_kernel("", lines);
+      result += " : ";
+      result += this->children_.at(2)->get_kernel("", lines);
+      result += ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }      
     virtual std::string get_kernel() const override
     {
       std::string result = "((";
@@ -2298,6 +2666,14 @@ namespace morefit {
       return std::make_unique<ConditionalNode<kernelT, evalT>>(this->comparator_,  std::move(this->children_.at(0)->copy()), std::move(childa), std::move(childb));
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      //substitutes both children and expression
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> expression = std::move(this->children_.at(0)->substitute(variables, values));
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> childa = std::move(this->children_.at(1)->substitute(variables, values));
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> childb = std::move(this->children_.at(2)->substitute(variables, values));
+      return std::make_unique<ConditionalNode<kernelT, evalT>>(this->comparator_,  std::move(expression), std::move(childa), std::move(childb));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
     {
       //substitutes both children and expression
       std::unique_ptr<ComputeGraphNode<kernelT, evalT>> expression = std::move(this->children_.at(0)->substitute(variables, values));
@@ -2487,7 +2863,456 @@ namespace morefit {
     }
   };
 
-  
+
+  //Node that loops over an even vector and sums up results from an expression
+  template<typename kernelT, typename evalT> 
+  class LoopAndSumNode: public ComputeGraphNode<kernelT, evalT> {
+  private:
+    //index name
+    std::string index_;
+    //EventVector to loop over, we do not manage the memory of this
+    EventVector<kernelT, evalT>* events_;
+  public:
+    int nevents() const
+    {
+      return events_->nevents();
+    }
+    int nevents_padded() const
+    {
+      return events_->nevents_padded();
+    }
+  public:
+    EventVector<kernelT, evalT>* get_events()
+    {
+      return events_;
+    }
+    LoopAndSumNode(EventVector<kernelT,evalT>* events, std::string index, std::unique_ptr<ComputeGraphNode<kernelT, evalT>> child)      
+      : ComputeGraphNode<kernelT, evalT>(std::move(child)),
+	index_(index),
+	events_(events)
+    {
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> copy() const override
+    {
+      return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(this->copy_children().at(0)));
+    }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override 
+    {
+      std::string result_name = "loop_result_" + IDCreator::Instance()->get_name();//this could be used, we will probably not run out of indices, DO NOT CHECK equality for index name
+      
+      std::string preamble = "";
+      preamble += this->kernelT_str() + " " + result_name + " = 0.0;\n";
+      preamble += "for (int " + index_ + " = 0; " + index_ + " < " + std::to_string(this->nevents()) +"; " + index_ + "++)\n";
+      preamble += "{\n";
+      //add eventvector variables
+      if (events_ != nullptr)
+	{
+	  for (int i=0; i<events_->ndimensions(); i++)
+	    preamble += this->kernelT_str() + " " + events_->get_dimensions().at(i)->get_name() + " = " + events_->get_name() + "[" + std::to_string(this->nevents_padded()*i) + "+" + index_ + "];\n";
+	  //note that this is not so trivial, need eventvector name+specific addess (SoA), eventvector[nevents_padded*i+idx]
+	  //this means every event vector needs a unique name (could generate a name centrally) -> this is the case now
+	  //eg. double x = eventvector[neventspadded*i+idx]
+	}
+      lines.push_back(preamble);
+      
+      std::string calculation = "";
+      calculation += result_name + " += " + this->children_.at(0)->get_kernel("", lines) + ";\n";
+      calculation += "}\n";
+      lines.push_back(calculation);
+      if (prefix == "")
+	return result_name;
+      else
+	{
+	  lines.push_back(prefix + result_name);
+	  return result_name;
+	}
+    }    
+    virtual std::string get_kernel() const override
+    {
+      assert(0);
+      return "test";
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> diff(std::string variable) const override
+    {
+      if (!this->variable_in_tree(variable))
+	return std::make_unique<ConstantNode<kernelT, evalT>>(0);
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->diff(variable);
+      return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(reschild));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {      
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->substitute(variables, values);
+      return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(reschild));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
+    {      
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->substitute(variables, values);
+      return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(reschild));
+    }
+    //copies and tries to simplify tree
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const override
+    {
+      //simplify children first
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->simplify();
+      //check if summands are constants
+      if (dynamic_cast<ConstantNode<kernelT, evalT>*>(reschild.get()) != nullptr)
+	{
+	  evalT constant = dynamic_cast<ConstantNode<kernelT, evalT>*>(reschild.get())->number_;
+	  return std::make_unique<ConstantNode<kernelT, evalT>>(nevents() * constant);//actually correct
+	}
+      //check if child depends on any variable other than the event vector dimensions
+      else
+	{
+	  std::vector<std::string> local_variables(events_->get_dimensions_str());
+	  if (!this->contains_other_variables(local_variables))
+	    {
+	      std::vector<std::string> dummy_variables;
+	      std::vector<double> dummy_values;	      
+	      evalT constant = this->eval(dummy_variables, dummy_values);//full evaluation possible!	      
+	      return std::make_unique<ConstantNode<kernelT, evalT>>(constant);
+	    }
+	  else
+	    return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(reschild));
+	}
+    }    
+    virtual void print(unsigned int level) const override
+    {
+      std::cout << std::string(level,'\t') << "LoopAndSumNode over index " << index_ << " with child" << std::endl;
+      this->children_.at(0)->print(level+1);
+    }
+    virtual double cost() const override
+    {
+      return (this->children_.at(0)->cost() + 2.0) * nevents();      
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> optimize_buffering_constant_terms(std::vector<std::string>& buffernames, std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& bufferexpressions, const std::vector<std::string>& variables, const std::string& prefix="morefit_buffer_", float buffering_cost_threshold = 2.0) override
+    {
+      std::vector<std::string> local_variables(variables);
+      local_variables.push_back(index_);
+      //the presence of local variables effectively protects the optimization routine from optimizing F(LoopAndSum) and only allows LoopAndSum itself to be optimized
+      //this allows for easy parallelisation of LoopAndSum, as it will always be at the top level in the bufferexpression
+      //
+      //pick up all local variables in the event vector
+      if (events_ != nullptr)
+	{
+	  for (int i=0; i<events_->ndimensions(); i++)
+	    local_variables.push_back(events_->get_dimensions().at(i)->get_name());
+	}
+      if (cost() > buffering_cost_threshold)
+	{
+	  if (!this->contains_other_variables(local_variables))//expression does not depend on any variables besides the ones given + the local variables, can optimise!
+	    {
+	      //first check if expression already exists in buffer list
+	      int found_idx = this->find_in_list(bufferexpressions);
+	      if (found_idx >= 0)
+		return std::make_unique<VariableNode<kernelT, evalT>>(prefix+std::to_string(found_idx));
+	      else
+		{
+		  int buffer_idx = buffernames.size();
+		  std::string buffername = prefix+std::to_string(buffer_idx);
+		  buffernames.push_back(buffername);
+		  bufferexpressions.emplace_back(this->copy());//just copy everything, no need for further optimisation
+		  return std::make_unique<VariableNode<kernelT, evalT>>(buffername);
+		}
+	    }
+	  else
+	    return std::make_unique<LoopAndSumNode<kernelT, evalT>>(events_, index_, std::move(this->children_.at(0)->optimize_buffering_constant_terms(buffernames, bufferexpressions, variables, prefix, buffering_cost_threshold)));
+	}
+      else
+	return this->copy();//copies also all children, but fine since we do not want to buffer this
+    }
+    virtual evalT eval(const std::vector<std::string>& variables, const std::vector<double> & values) const override
+    {
+      evalT result = 0.0;
+      std::vector<std::string> local_variables(variables);
+      local_variables.push_back(index_);
+      if (events_ != nullptr)
+	{
+	  for (int i=0; i<events_->ndimensions(); i++)
+	    local_variables.push_back(events_->get_dimensions().at(i)->get_name());
+	}      
+      for (unsigned int i=0; i<nevents(); i++)
+	{
+	  std::vector<double> local_values(values);
+	  //need to add index value and value of all event vector variables
+	  local_values.push_back(i);
+	  for (int j=0; j<events_->ndimensions(); j++)
+	    local_values.push_back(events_->operator()(i, j));
+	  result += this->children_.at(0)->eval(local_variables, local_values);
+	}
+      return result;
+    }
+    virtual std::string draw_node() const override
+    {
+      std::string result;
+      result +=  "LoopAndSum -> { ";
+      result += index_ + "," + this->children_.at(0)->draw_node() + " }";
+      return result;
+    }
+    //check equality of graphs
+    virtual bool operator==(const std::unique_ptr<ComputeGraphNode<kernelT, evalT>>& rhs) const override
+    {
+      LoopAndSumNode<kernelT, evalT>* rhs_ = dynamic_cast<LoopAndSumNode<kernelT, evalT>*>(rhs.get());
+      if (rhs_ != nullptr)
+	{
+	  if (this->index_ != rhs_->index_)
+	    return false;
+	  if (this->events_ != rhs_->events_)
+	    return false;
+	  if (this->nevents() != rhs_->nevents())
+	    return false;
+	  if (this->nevents_padded() != rhs_->nevents_padded())
+	    return false;
+	  if (this->children_.at(0)->operator==(rhs_->children_.at(0)))
+	    return true;
+	  else
+	    return false;
+	}
+      else
+	return false;
+    }
+  };
+
+  //access one element in an EventVector
+  template<typename kernelT, typename evalT> 
+  class EventVectorNode: public ComputeGraphNode<kernelT, evalT> {
+  private:
+    EventVector<kernelT, evalT>* events_;
+    int dimension_;
+  public:
+    EventVector<kernelT, evalT>* get_events()
+    {
+      return events_;
+    }
+    //child gives the calculation of the index
+    EventVectorNode(EventVector<kernelT,evalT>* events, std::unique_ptr<ComputeGraphNode<kernelT, evalT>> child, int dimension = 0)      
+      : ComputeGraphNode<kernelT, evalT>(std::move(child)),
+	events_(events),
+	dimension_(dimension)
+    {
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> copy() const override
+    {
+      return std::make_unique<EventVectorNode<kernelT, evalT>>(events_, std::move(this->copy_children().at(0)), dimension_);
+    }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override 
+    {
+      std::string result = events_->get_name() + "[(int)(" + (dimension_ == 0 ? this->children_.at(0)->get_kernel("", lines)
+							: std::to_string(dimension_*events_->nevents_padded()) + "+" + this->children_.at(0)->get_kernel("", lines)) + ")]";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
+    virtual std::string get_kernel() const override
+    {
+      assert(0);
+      return "test";
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> diff(std::string variable) const override
+    {
+      return std::make_unique<ConstantNode<kernelT, evalT>>(0);
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {      
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->substitute(variables, values);
+      return std::make_unique<EventVectorNode<kernelT, evalT>>(events_, std::move(reschild), dimension_);
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
+    {      
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->substitute(variables, values);
+      return std::make_unique<EventVectorNode<kernelT, evalT>>(events_, std::move(reschild), dimension_);
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const override
+    {
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> reschild = this->children_.at(0)->simplify();
+      if (dynamic_cast<ConstantNode<kernelT, evalT>*>(reschild.get()) != nullptr)
+	{
+	  evalT constant = dynamic_cast<ConstantNode<kernelT, evalT>*>(reschild.get())->number_;
+	  return std::make_unique<ConstantNode<kernelT, evalT>>(events_->operator()(int(constant), dimension_));//TODO further dimensions
+	}
+      else
+	return std::make_unique<EventVectorNode<kernelT, evalT>>(events_, std::move(reschild), dimension_);
+    }    
+    virtual void print(unsigned int level) const override
+    {
+      std::cout << std::string(level,'\t') << "EventVectorNode dimension " << dimension_ << " with index " << std::endl;
+      this->children_.at(0)->print(level+1);
+    }
+    virtual double cost() const override
+    {
+      return 2.0 + this->children_.at(0)->cost();//lookup cost      
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> optimize_buffering_constant_terms(std::vector<std::string>& buffernames, std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& bufferexpressions, const std::vector<std::string>& variables, const std::string& prefix="morefit_buffer_", float buffering_cost_threshold = 2.0) override
+    {
+      if (cost() > buffering_cost_threshold)
+	{
+	  if (!this->contains_other_variables(variables))//expression does not depend on any variables besides the ones given, can optimise!
+	    {
+	      //first check if expression already exists in buffer list
+	      int found_idx = this->find_in_list(bufferexpressions);
+	      if (found_idx >= 0)
+		return std::make_unique<VariableNode<kernelT, evalT>>(prefix+std::to_string(found_idx));
+	      else
+		{
+		  //previous version
+		  int buffer_idx = buffernames.size();
+		  std::string buffername = prefix+std::to_string(buffer_idx);
+		  buffernames.push_back(buffername);
+		  bufferexpressions.emplace_back(this->copy());//just copy everything, no need for further optimisation
+		  return std::make_unique<VariableNode<kernelT, evalT>>(buffername);
+		}
+	    }
+	  else
+	    return std::make_unique<EventVectorNode<kernelT, evalT>>(events_, std::move(this->children_.at(0)->optimize_buffering_constant_terms(buffernames, bufferexpressions, variables, prefix, buffering_cost_threshold)), dimension_);
+	}
+      else
+	return this->copy();//copies also all children, but fine since we do not want to buffer this
+    }
+    virtual evalT eval(const std::vector<std::string>& variables, const std::vector<double> & values) const override
+    {
+      evalT result = this->events_->operator()(int(this->children_.at(0)->eval(variables, values)), dimension_);
+      return result;
+    }
+    virtual std::string draw_node() const override
+    {
+      std::string result;
+      result +=  "EventVector -> { ";
+      result += this->events_->get_dimensions().at(dimension_)->get_name() + ", " + this->children_.at(0)->draw_node() + " }";
+      return result;
+    }
+    //check equality of graphs
+    virtual bool operator==(const std::unique_ptr<ComputeGraphNode<kernelT, evalT>>& rhs) const override
+    {
+      EventVectorNode<kernelT, evalT>* rhs_ = dynamic_cast<EventVectorNode<kernelT, evalT>*>(rhs.get());
+      if (rhs_ != nullptr)
+	{
+	  if (this->events_ != rhs_->events_)
+	    return false;
+	  if (this->dimension_ != rhs_->dimension_)
+	    return false;
+	  if (this->children_.at(0)->operator==(rhs_->children_.at(0)))
+	    return true;
+	  else
+	    return false;
+	}
+      else
+	return false;
+    }
+  };
+
+
+  template<typename kernelT, typename evalT> 
+  class FloorNode: public ComputeGraphNode<kernelT, evalT> {
+  public:
+    FloorNode(std::unique_ptr<ComputeGraphNode<kernelT, evalT>> child):
+      ComputeGraphNode<kernelT, evalT>(std::move(child))
+    {
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> copy() const override
+    {
+      return std::make_unique<FloorNode<kernelT, evalT>>(std::move(this->copy_children().at(0)));
+    }
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override //, int current_index
+    {
+      std::string result = "floor(" + this->children_.at(0)->get_kernel("", lines) + ")";
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }
+    virtual std::string get_kernel() const override
+    {      
+      return "floor(" + this->children_.at(0)->get_kernel() + ")";
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> diff(std::string variable) const override
+    {      
+      //if (!this->variable_in_tree(variable))
+      //	return std::make_unique<ConstantNode<kernelT, evalT>>(0);
+      return std::make_unique<ConstantNode<kernelT, evalT>>(0);
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      return std::make_unique<FloorNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
+    {
+      return std::make_unique<FloorNode<kernelT, evalT>>(std::move(this->children_.at(0)->substitute(variables, values)));
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const override
+    {
+      std::unique_ptr child = this->children_.at(0)->simplify();
+      if (dynamic_cast<ConstantNode<kernelT, evalT>*>(child.get()) != nullptr)
+	{
+	  evalT constant = floor(dynamic_cast<ConstantNode<kernelT, evalT>*>(child.get())->number_);
+	  return std::make_unique<ConstantNode<kernelT, evalT>>(constant);
+	}
+      else
+	return std::make_unique<FloorNode<kernelT, evalT>>(std::move(child));
+    }
+    virtual void print(unsigned int level) const override
+    {
+      std::cout << std::string(level,'\t') << "FloorNode with " << this->children_.size() << " children" << std::endl;
+      for (unsigned int i=0; i<this->children_.size(); i++)
+	this->children_.at(i)->print(level+1);
+    }
+    virtual double cost() const override
+    {
+      double c = this->children_.at(0)->cost();
+      return 2.0 + c;
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> optimize_buffering_constant_terms(std::vector<std::string>& buffernames, std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& bufferexpressions, const std::vector<std::string>& variables, const std::string& prefix="morefit_buffer_", float buffering_cost_threshold = 2.0) override
+    {
+      if (cost() > buffering_cost_threshold)
+	{
+	  if (!this->contains_other_variables(variables))//expression does not depend on any variables besides the ones given, can optimise!
+	    {
+	      int found_idx = this->find_in_list(bufferexpressions);
+	      if (found_idx >= 0)
+		return std::make_unique<VariableNode<kernelT, evalT>>(prefix+std::to_string(found_idx));
+	      else
+		{	      
+		  int buffer_idx = buffernames.size();
+		  std::string buffername = prefix+std::to_string(buffer_idx);
+		  buffernames.push_back(buffername);
+		  bufferexpressions.emplace_back(this->copy());//just copy everything, no need for further optimisation
+		  return std::make_unique<VariableNode<kernelT, evalT>>(buffername);
+		}
+	    }
+	  else
+	    return std::make_unique<FloorNode<kernelT, evalT>>(std::move(this->children_.at(0)->optimize_buffering_constant_terms(buffernames, bufferexpressions, variables, prefix, buffering_cost_threshold)));
+	}
+      else
+	return this->copy();//copies also all children, but fine since we do not want to buffer this
+    }
+    virtual evalT eval(const std::vector<std::string>& variables, const std::vector<double> & values) const override
+    {
+      return floor(this->children_.at(0)->eval(variables, values));
+    }
+    virtual std::string draw_node() const override
+    {
+      std::string result;
+      result +=  "floor -> { ";
+      result += this->children_.at(0)->draw_node() + "}";
+      return result;
+    }
+    //check equality of graphs
+    virtual bool operator==(const std::unique_ptr<ComputeGraphNode<kernelT, evalT>>& rhs) const override
+    {
+      FloorNode<kernelT, evalT>* rhs_ = dynamic_cast<FloorNode<kernelT, evalT>*>(rhs.get());
+      if (rhs_ != nullptr)
+	return this->children_.at(0)->operator==(rhs_->children_.at(0));
+      else
+	return false;
+    }
+  };
+
+
   template<typename kernelT, typename evalT>
   std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Variable(std::string name)
   {
@@ -3006,6 +3831,25 @@ namespace morefit {
   std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Erf(evalT A)
   {
     return std::make_unique<ErfNode<kernelT, evalT>>(std::make_unique<ConstantNode<kernelT, evalT>>(A));
+  };
+
+  //Floor
+  template<typename kernelT, typename evalT>
+  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Floor(std::unique_ptr<ComputeGraphNode<kernelT, evalT>> A)
+  {
+    return std::make_unique<FloorNode<kernelT, evalT>>(std::move(A));
+  };
+
+  template<typename kernelT, typename evalT>
+  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Floor(std::string A)
+  {
+    return std::make_unique<FloorNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT, evalT>>(A));
+  };
+
+  template<typename kernelT, typename evalT>
+  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Floor(evalT A)
+  {
+    return std::make_unique<FloorNode<kernelT, evalT>>(std::make_unique<ConstantNode<kernelT, evalT>>(A));
   };
 
 

@@ -61,10 +61,11 @@ namespace morefit {
     int thread_idx_ = 0;
     int nthreads_ = 0;
     seedT* seed_ = nullptr;
-    kernelT* input_ = nullptr;
+    kernelT* input_;
     kernelT* output_ = nullptr;
     kernelT* params_ = nullptr;
     kernelT* kahan_ = nullptr;
+    std::vector<kernelT*> other_data_;
   public:
     worker(worker_type wt, void* fcn_ptr):
       wt_(wt),
@@ -83,37 +84,37 @@ namespace morefit {
 	      {
 	      case worker_type::generate:
 		{
-		  void (*mykernel)(int, int, int, int, int, int, uint32_t*, kernelT*); 
-		  mykernel = (void (*)(int, int, int, int, int, int, uint32_t* ,kernelT*))(fcn_ptr_);
-		  mykernel(nevents_, nevents_padded_, from_, to_, thread_idx_, nthreads_, seed_, output_);
+		  void (*mykernel)(int, int, int, int, int, int, uint32_t*, kernelT**, kernelT*); 
+		  mykernel = (void (*)(int, int, int, int, int, int, uint32_t*, kernelT**, kernelT*))(fcn_ptr_);
+		  mykernel(nevents_, nevents_padded_, from_, to_, thread_idx_, nthreads_, seed_, other_data_.empty() ? nullptr : &other_data_.front(), output_);
 		  break;
 		}
 	      case worker_type::compute:
 		{
-		  void (*mykernel)(int, int, int, int, kernelT*, kernelT*); 
-		  mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*))(fcn_ptr_);
-		  mykernel(nevents_, nevents_padded_, from_, to_, input_, output_);
+		  void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*); 
+		  mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*))(fcn_ptr_);
+		  mykernel(nevents_, nevents_padded_, from_, to_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_);
 		  break;
 		}
 	      case worker_type::compute_param:
 		{
-		  void (*mykernel)(int, int, int, int, kernelT*, kernelT*, kernelT*); 
-		  mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, kernelT*))(fcn_ptr_);
-		  mykernel(nevents_, nevents_padded_, from_, to_, input_, output_, params_);
+		  void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*); 
+		  mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*))(fcn_ptr_);
+		  mykernel(nevents_, nevents_padded_, from_, to_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, params_);
 		  break;
 		}
 	      case worker_type::compute_kahan:
 		{
-		  void (*mykernel)(int, int, int, int, kernelT*, kernelT*, evalT*); 
-		  mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, evalT*))(fcn_ptr_);
-		  mykernel(nevents_, nevents_padded_, from_, to_, input_, output_, kahan_);
+		  void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, evalT*); 
+		  mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, evalT*))(fcn_ptr_);
+		  mykernel(nevents_, nevents_padded_, from_, to_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, kahan_);
 		  break;
 		}
 	      case worker_type::compute_param_kahan:
 		{
-		  void (*mykernel)(int, int, int, int, kernelT*, kernelT*, kernelT*, evalT*); 
-		  mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, kernelT*, evalT*))(fcn_ptr_);
-		  mykernel(nevents_, nevents_padded_, from_, to_, input_, output_, params_, kahan_);
+		  void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*, evalT*); 
+		  mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*, evalT*))(fcn_ptr_);
+		  mykernel(nevents_, nevents_padded_, from_, to_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, params_, kahan_);
 		  break;
 		}
 	      }
@@ -143,8 +144,6 @@ namespace morefit {
     {
       std::unique_lock<std::mutex> lock(locking_mutex_);
       has_work_ = true;
-      //could set arguments here      
-      //how to propagate function signature?
       lock.unlock();
       cond_var_.notify_one();
     }
@@ -155,8 +154,9 @@ namespace morefit {
 	return has_work_ == false;
       });
     }
-    void set_args_generate(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, int thread_idx, int nthreads, seedT* seed, kernelT* output)
+    void set_args_generate(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, int thread_idx, int nthreads, seedT* seed, std::vector<kernelT*> other_data, kernelT* output)
     {
+      std::unique_lock<std::mutex> lock(locking_mutex_);
       nevents_ = nevents;
       nevents_padded_ = nevents_padded;
       from_ = from;
@@ -164,47 +164,61 @@ namespace morefit {
       thread_idx_ = thread_idx;
       nthreads_ = nthreads;
       seed_ = seed;
+      other_data_ = other_data; 
       output_ = output;
+      lock.unlock();
     } 
-    void set_args_compute(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, kernelT* output)
+    void set_args_compute(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, std::vector<kernelT*> other_data, kernelT* output)
     {
+      std::unique_lock<std::mutex> lock(locking_mutex_);
       nevents_ = nevents;
       nevents_padded_ = nevents_padded;
       from_ = from;
       to_ = to;
       input_ = input;
+      other_data_ = other_data; 
       output_ = output;
+      lock.unlock();
     }
-    void set_args_compute_params(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, kernelT* output, kernelT* params)
+    void set_args_compute_params(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, std::vector<kernelT*> other_data, kernelT* output, kernelT* params)
     {
+      std::unique_lock<std::mutex> lock(locking_mutex_);
       nevents_ = nevents;
       nevents_padded_ = nevents_padded;
       from_ = from;
       to_ = to;
       input_ = input;
+      other_data_ = other_data; 
       output_ = output;
       params_ = params;
+      lock.unlock();
     }
-    void set_args_compute_kahan(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, kernelT* output, kernelT* kahan)
+    void set_args_compute_kahan(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, std::vector<kernelT*> other_data, kernelT* output, kernelT* kahan)
     {
+      std::unique_lock<std::mutex> lock(locking_mutex_);
       nevents_ = nevents;
       nevents_padded_ = nevents_padded;
       from_ = from;
       to_ = to;
       input_ = input;
+      other_data_ = other_data; 
       output_ = output;
       kahan_ = kahan;
+      lock.unlock();
     }
-    void set_args_compute_params_kahan(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, kernelT* output, kernelT* params, kernelT* kahan)
+    void set_args_compute_params_kahan(unsigned int nevents, unsigned int nevents_padded, unsigned int from, unsigned int to, kernelT* input, std::vector<kernelT*> other_data, kernelT* output, kernelT* params, kernelT* kahan)
     {
+      std::unique_lock<std::mutex> lock(locking_mutex_);
       nevents_ = nevents;
       nevents_padded_ = nevents_padded;
       from_ = from;
       to_ = to;
       input_ = input;
+      other_data_ = other_data; 
       output_ = output;
       params_ = params;
       kahan_ = kahan;
+      lock.unlock();
     }
   };
   
@@ -221,12 +235,14 @@ namespace morefit {
     //pointers
     void* fcn_ptr_;
     kernelT* input_;
+    std::vector<kernelT*> other_data_;
     seedT* seed_;
     kernelT* output_;
     evalT* kahan_;
     kernelT* params_;
-    //owns the above pointers
+    //owns the above pointers    
     bool holds_input_;
+    std::vector<bool> holds_other_data_;
     bool holds_seed_;
     bool holds_output_;
     bool holds_kahan_;
@@ -245,11 +261,13 @@ namespace morefit {
       nevents_padded_(0),
       fcn_ptr_(NULL),
       input_(NULL),
+      other_data_(std::vector<kernelT*>()),
       seed_(NULL),
       output_(NULL),
       kahan_(NULL),
       params_(NULL),
       holds_input_(false),
+      holds_other_data_(std::vector<bool>()),
       holds_seed_(false),
       holds_output_(false),
       holds_kahan_(false),
@@ -260,8 +278,13 @@ namespace morefit {
     }
     ~LLVMBlock()
     {      
+      for (int i=0; i<other_data_.size(); i++)
+	if (holds_other_data_.at(i) && other_data_.at(i) != nullptr)
+	  delete[] other_data_.at(i);
+      
       if (input_ && holds_input_)
 	delete[] input_;
+      
       if (seed_ && holds_seed_)
 	delete[] seed_;
       if (output_ && holds_output_)
@@ -270,6 +293,59 @@ namespace morefit {
 	delete[] kahan_;
       if (params_ && holds_params_)
 	delete[] params_;
+    }    
+    virtual bool PrepareOtherDataBuffers(int nbuffers) override
+    {
+      
+      for (int i=0; i<other_data_.size(); i++)
+	if (holds_other_data_.size() > i && other_data_.size() > i && holds_other_data_.at(i) && other_data_.at(i) != nullptr)
+	  {
+	    delete[] other_data_.at(i);
+	    other_data_.at(i) = nullptr;
+	    holds_other_data_.at(i) = false;
+	  }
+      other_data_.resize(nbuffers);
+      holds_other_data_.resize(nbuffers);
+      for (int i=0; i<nbuffers; i++)
+	{
+	  other_data_.at(i) = nullptr;
+	  holds_other_data_.at(i) = false;
+	}
+      return true;
+    }    
+    virtual bool SetupOtherDataBuffer(int idx, unsigned long int nbytes) override
+    {
+      if (idx >= other_data_.size())
+	{
+	  std::cout << "Trying to setup out of range input buffer" << std::endl;
+	  assert(0);
+	}
+      
+      if (other_data_.at(idx) && holds_other_data_.at(idx) && other_data_.at(idx) != nullptr)
+	delete[] other_data_.at(idx);
+      
+      other_data_.at(idx) = new kernelT[nbytes/sizeof(kernelT)];
+      holds_other_data_.at(idx) = true;
+      return true;
+    }
+    virtual bool SetupOtherDataBuffer(int idx, ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) override
+    {
+      if (idx >= other_data_.size())
+	{
+	  std::cout << "Trying to setup out of range input buffer" << std::endl;
+	  assert(0);
+	}
+      LLVMBlock<kernelT, evalT>* inputblock = dynamic_cast<LLVMBlock<kernelT, evalT>*>(input);      
+      
+      if (other_data_.at(idx) && holds_other_data_.at(idx))
+	delete[] other_data_.at(idx);
+      
+      if (use_data_in)
+	other_data_.at(idx) = inputblock->other_data_.at(idx);//assumes same ordering
+      else
+	other_data_.at(idx) = inputblock->output_;
+      holds_other_data_.at(idx) = false;
+      return true;
     }
     virtual bool SetupInputBuffer(unsigned long int nbytes) override
     {
@@ -279,24 +355,24 @@ namespace morefit {
       holds_input_ = true;
       return true;
     }
+    virtual bool SetupInputBuffer(ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) override
+    {
+      LLVMBlock<kernelT, evalT>* inputblock = dynamic_cast<LLVMBlock<kernelT, evalT>*>(input);      
+      if (input_ && holds_input_)
+	delete[] input_;
+      if (use_data_in)
+	input_ = inputblock->input_;
+      else
+	input_ = inputblock->output_;
+      holds_input_ = false;
+      return true;
+    }    
     virtual bool SetupSeedBuffer(unsigned long int nbytes) override
     {
       if (seed_ && holds_seed_)
 	delete[] seed_;
       seed_ = new seedT[nbytes/sizeof(seedT)];
       holds_seed_ = true;
-      return true;
-    }
-    virtual bool SetupInputBuffer(ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) override
-    {
-      LLVMBlock<kernelT, evalT>* inputblock = dynamic_cast<LLVMBlock<kernelT, evalT>*>(input);      
-      if (input_ && holds_input_)
-	delete [] input_; 
-      if (use_data_in)
-	input_ = inputblock->input_;
-      else
-	input_ = inputblock->output_;
-      holds_input_ = false;
       return true;
     }
     virtual bool SetupParameterBuffer(unsigned long int nbytes) override
@@ -338,6 +414,12 @@ namespace morefit {
       std::memcpy(input_, data.get_data(), data.buffer_size());
       return true;
     }
+    virtual bool CopyToOtherDataBuffer(int idx, const EventVector<kernelT, evalT>& data) override
+    {
+      //TODO does not need to actually copy as the thread has access to host memory
+      std::memcpy(other_data_.at(idx), data.get_data(), data.buffer_size());
+      return true;
+    }
     virtual bool CopyToSeedBuffer(const EventVector<seedT, evalT>& data) override
     {
       std::memcpy(seed_, data.get_data(), data.buffer_size());
@@ -360,7 +442,8 @@ namespace morefit {
     }
     //compilation of generation kernel with specific input and output signature
     virtual bool MakeGenerateKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature,
-				    const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) override
+				    const std::vector<std::string>& params, const std::vector<EventVector<kernelT,evalT>*> other_data,
+				    const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) override
     {
       name_ = name;
       nevents_ = nevents;
@@ -380,6 +463,7 @@ namespace morefit {
       std::string kernel_code;
       kernel_code += "#include <math.h>\n";
       kernel_code += "#include <stdint.h>\n";
+      
       //prng code
       if constexpr (std::is_same_v<uint32_t, seedT>)
 	{
@@ -403,7 +487,7 @@ namespace morefit {
 	  kernel_code += "  return result * 2.3283064365386963e-10;\n";
 	  kernel_code += "}\n";
 	  kernel_code += "\n";
-	  kernel_code += "void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const int threadidx, const int nthreads, const uint32_t * data, "+kernelT_str+"* output)\n";
+	  kernel_code += "void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const int threadidx, const int nthreads, const uint32_t * data, const "+kernelT_str+ "** other_data, "+kernelT_str+"* output)\n";
 	}
       if constexpr (std::is_same_v<uint64_t, seedT>)
 	{
@@ -426,7 +510,7 @@ namespace morefit {
 	  kernel_code += "  return (result >> 11) * 0x1.0p-53;\n";
 	  kernel_code += "}\n";
 	  kernel_code += "\n";
-	  kernel_code += "void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const int threadidx, const int nthreads, const uint64_t * data, "+kernelT_str+"* output)\n";
+	  kernel_code += "void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const int threadidx, const int nthreads, const uint64_t * data, const "+kernelT_str+ "** other_data, "+kernelT_str+"* output)\n";
 	}
       
       kernel_code += "{\n";
@@ -448,7 +532,10 @@ namespace morefit {
 	  kernel_code += std::to_string(i);
 	  kernel_code += "];\n";
 	}
-
+      //add pointers to other_data
+      for (unsigned int i=0; i<other_data.size(); i++)
+	kernel_code += "const " + kernelT_str + "* " + other_data.at(i)->get_name() + " = other_data[" + std::to_string(i) + "];\n";
+      
       //set max probability
       std::ostringstream maxprob_str;
       maxprob_str.precision(15);
@@ -468,6 +555,7 @@ namespace morefit {
 	  kernel_code += std::to_string(i);
 	  kernel_code += "];\n";
 	}      
+      
       //loop over events from defined start to finish
       kernel_code += "for (unsigned int i=from; i<to; i++)\n";
       kernel_code += "{\n";
@@ -485,7 +573,8 @@ namespace morefit {
 	  kernel_code += "    "+output_signature.at(i).get_name() + " = " + min.str() + " + " + delta.str() + "*xoshiro(rnd_state);\n";
 	}
       //evaluate pdf
-      kernel_code += "    prob = " + graphs.at(0)->get_kernel() + ";\n"; 
+      kernel_code += graphs.at(0)->get_kernel("    prob = ") + ";\n"; 
+      
       //accept/reject
       kernel_code += "    if (maxprob*(xoshiro(rnd_state)) < prob)\n";
       kernel_code += "    {\n";
@@ -533,7 +622,8 @@ namespace morefit {
     }
     //compilation of compute kernel with specific input and output signature
     virtual bool MakeComputeKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature,
-				   const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) override
+				   const std::vector<std::string>& params, EventVector<kernelT,evalT>* data, const std::vector<EventVector<kernelT,evalT>*> other_data,
+				   const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) override
     {
 
       kahan_summation_ = kahan_summation;
@@ -570,16 +660,16 @@ namespace morefit {
       if (kahan_summation)
 	{
 	  if (params.size() > 0)
-	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, "+kernelT_str+"* output, const "+kernelT_str+"* parameters, "+evalT_str+"* kahan)\n");
+	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, const "+kernelT_str+ "** other_data, "+kernelT_str+"* output, const "+kernelT_str+"* parameters, "+evalT_str+"* kahan)\n");
 	  else
-	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, "+kernelT_str+"* output, "+evalT_str+" *kahan)\n");
+	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, const "+kernelT_str+ "** other_data, "+kernelT_str+"* output, "+evalT_str+" *kahan)\n");
 	}
       else
 	{
 	  if (params.size() > 0)
-	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, "+kernelT_str+"* output, const "+kernelT_str+"* parameters)\n");
+	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, const "+kernelT_str+"** other_data, "+kernelT_str+"* output, const "+kernelT_str+"* parameters)\n");
 	  else
-	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, "+kernelT_str+"* output)\n");
+	    kernel_code += ("void "+name_+"(const unsigned int nevents, const unsigned int nevents_padded, const unsigned int from, const unsigned int to, const "+kernelT_str+"* data, const "+kernelT_str+"** other_data, "+kernelT_str+"* output)\n");
 	}
       kernel_code += "{\n";
       //online kahan summation
@@ -618,6 +708,11 @@ namespace morefit {
 	  kernel_code += std::to_string(i);
 	  kernel_code += "];\n";
 	}
+      //add pointers to other_data
+      for (unsigned int i=0; i<other_data.size(); i++)
+	{
+	  kernel_code += "const " + kernelT_str + "* " + other_data.at(i)->get_name() + " = other_data[" + std::to_string(i) + "];\n";
+	}
       
       if (vectorization)//explicitly ask for vectorization of event loop
 	{
@@ -635,7 +730,7 @@ namespace morefit {
 	{
 	  kernel_code += "  const " + kernelT_str + " ";
 	  kernel_code += input_signature.at(i).get_name();
-	  kernel_code += " = data[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "];\n";  //TODO I guess we do not need padding as argument for llvm, any issue with vectorization?
+	  kernel_code += " = data[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "];\n";
 	}
 
       //actual kernel calculating the prob
@@ -644,13 +739,12 @@ namespace morefit {
 	  if (kahan_summation)
 	    {
 	      if (vectorization && graphs.size() == 1) //for one graph it is more efficient to store result in the output and then do a second vectorised loop for kahan summation
-		kernel_code += "  output[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "] = ";
+		kernel_code += graphs.at(i)->get_kernel("  output[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "] = ");
 	      else //for multiple graphs (or not vectorized) use local variable
-		kernel_code += "  const " + kernelT_str + " result_" + std::to_string(i) + " = ";
+		kernel_code += graphs.at(i)->get_kernel("  const " + kernelT_str + " result_" + std::to_string(i) + " = ");
 	    }
 	  else
-	    kernel_code += "  output[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "] = ";
-	  kernel_code +=  graphs.at(i)->get_kernel(); 
+	    kernel_code += graphs.at(i)->get_kernel("  output[" + (i==0 ? std::string("i") : ("nevents*" + std::to_string(i) + "+i")) + "] = ");
 	  kernel_code += ";\n";
 	}
       for (unsigned int i=0; i<graphs.size(); i++)
@@ -758,15 +852,15 @@ namespace morefit {
 		{
 		  for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)			  
 		    workers.emplace_back(std::make_unique<worker<kernelT, evalT, seedT>>(worker<kernelT, evalT, seedT>::worker_type::generate, fcn_ptr_));
-		}
+		}	      
 	      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
 		{
-		  int size = nevents_/backend_->opts_->llvm_nthreads;
-		  int from = i*size;
-		  int to = i*size + size;
+		  unsigned int size = nevents_/backend_->opts_->llvm_nthreads;
+		  unsigned int from = i*size;
+		  unsigned int to = i*size + size;
 		  if (i==backend_->opts_->llvm_nthreads-1)
 		    to = nevents_;
-		  workers.at(i)->set_args_generate(nevents_, nevents_padded_, from, to, i, backend_->opts_->llvm_nthreads, seed_, output_);
+		  workers.at(i)->set_args_generate(nevents_, nevents_padded_, from, to, i, backend_->opts_->llvm_nthreads, seed_, other_data_, output_);
 		  workers.at(i)->work();
 		}
 	      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
@@ -774,9 +868,9 @@ namespace morefit {
 	    }
 	  else //single-threaded
 	    {
-	      void (*mykernel)(int, int, int, int, int, int, uint32_t*, kernelT*); 
-	      mykernel = (void (*)(int, int, int, int, int, int, uint32_t* ,kernelT*))(fcn_ptr_);
-	      mykernel(nevents_, nevents_padded_, 0, nevents_, 0, backend_->opts_->llvm_nthreads, seed_, output_);
+	      void (*mykernel)(int, int, int, int, int, int, uint32_t*, kernelT**, kernelT*); 
+	      mykernel = (void (*)(int, int, int, int, int, int, uint32_t*, kernelT**, kernelT*))(fcn_ptr_);
+	      mykernel(nevents_, nevents_padded_, 0, nevents_, 0, backend_->opts_->llvm_nthreads, seed_, other_data_.empty() ? nullptr : &other_data_.front(), output_);
 	    }
 	}
       else //submit standard compute kernel
@@ -803,7 +897,7 @@ namespace morefit {
 			  int to = i*size + size;
 			  if (i==backend_->opts_->llvm_nthreads-1)
 			    to = nevents_;
-			  workers.at(i)->set_args_compute_params_kahan(nevents_, nevents_padded_, from, to, input_, output_, params_, &kahan_sums.at(i)[0]);
+			  workers.at(i)->set_args_compute_params_kahan(nevents_, nevents_padded_, from, to, input_, other_data_, output_, params_, &kahan_sums.at(i)[0]);
 			  workers.at(i)->work();
 			}
 		      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
@@ -833,7 +927,7 @@ namespace morefit {
 			  int to = i*size + size;
 			  if (i==backend_->opts_->llvm_nthreads-1)
 			    to = nevents_;
-			  workers.at(i)->set_args_compute_kahan(nevents_, nevents_padded_, from, to, input_, output_, &kahan_sums.at(i)[0]);
+			  workers.at(i)->set_args_compute_kahan(nevents_, nevents_padded_, from, to, input_, other_data_, output_, &kahan_sums.at(i)[0]);
 			  workers.at(i)->work();
 			}
 		      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
@@ -865,7 +959,7 @@ namespace morefit {
 			  int to = i*size + size;
 			  if (i==backend_->opts_->llvm_nthreads-1)
 			    to = nevents_;
-			  workers.at(i)->set_args_compute_params(nevents_, nevents_padded_, from, to, input_, output_, params_);
+			  workers.at(i)->set_args_compute_params(nevents_, nevents_padded_, from, to, input_, other_data_, output_, params_);
 			  workers.at(i)->work();
 			}
 		      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
@@ -885,7 +979,7 @@ namespace morefit {
 			  int to = i*size + size;
 			  if (i==backend_->opts_->llvm_nthreads-1)
 			    to = nevents_;
-			  workers.at(i)->set_args_compute(nevents_, nevents_padded_, from, to, input_, output_);
+			  workers.at(i)->set_args_compute(nevents_, nevents_padded_, from, to, input_, other_data_, output_);
 			  workers.at(i)->work();
 			}
 		      for (unsigned int i=0; i<backend_->opts_->llvm_nthreads; i++)
@@ -900,30 +994,30 @@ namespace morefit {
 		{
 		  if (params_)
 		    {
-		      void (*mykernel)(int, int, int, int, kernelT*, kernelT*, kernelT*, evalT*); 
-		      mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, kernelT*, evalT*))(fcn_ptr_);
-		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, output_, params_, kahan_);
+		      void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*, evalT*); 
+		      mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*, evalT*))(fcn_ptr_);
+		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, params_, kahan_);
 		    }
 		  else
 		    {
-		      void (*mykernel)(int, int, int, int, kernelT*, kernelT*, evalT*); 
-		      mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, evalT*))(fcn_ptr_);
-		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, output_, kahan_);
+		      void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, evalT*); 
+		      mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, evalT*))(fcn_ptr_);
+		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, kahan_);
 		    }
 		}
 	      else
 		{
 		  if (params_)
 		    {
-		      void (*mykernel)(int, int, int, int, kernelT*, kernelT*, kernelT*); 
-		      mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*, kernelT*))(fcn_ptr_);
-		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, output_, params_);
+		      void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*); 
+		      mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*, kernelT*))(fcn_ptr_);
+		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_, params_);
 		    }
 		  else
 		    {
-		      void (*mykernel)(int, int, int, int, kernelT*, kernelT*); 
-		      mykernel = (void (*)(int, int, int, int, kernelT*,kernelT*))(fcn_ptr_);
-		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, output_);
+		      void (*mykernel)(int, int, int, int, kernelT*, kernelT**, kernelT*); 
+		      mykernel = (void (*)(int, int, int, int, kernelT*, kernelT**, kernelT*))(fcn_ptr_);
+		      mykernel(nevents_, nevents_padded_, 0, nevents_, input_, other_data_.empty() ? nullptr : &other_data_.front(), output_);
 		    }
 		}
 	    }

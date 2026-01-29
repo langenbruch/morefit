@@ -47,13 +47,13 @@ int main()
   compute_opts.print_level =2;
   compute_opts.print();
   
-  typedef morefit::OpenCLBackend backendT;
-  typedef morefit::OpenCLBlock<kernelT, evalT> blockT;
-  morefit::OpenCLBackend backend(&compute_opts);
+  //typedef morefit::OpenCLBackend backendT;
+  //typedef morefit::OpenCLBlock<kernelT, evalT> blockT;
+  //morefit::OpenCLBackend backend(&compute_opts);
 
-  //typedef morefit::LLVMBackend backendT;
-  //typedef morefit::LLVMBlock<kernelT, evalT> blockT;
-  //morefit::LLVMBackend backend(&compute_opts);
+  typedef morefit::LLVMBackend backendT;
+  typedef morefit::LLVMBlock<kernelT, evalT> blockT;
+  morefit::LLVMBackend backend(&compute_opts);
 
   morefit::dimension<evalT> m("m", "#it{m} [GeV/#it{c}^{2}]", 5.0, 7.0, false);
   morefit::parameter<evalT> mb("mb", "m(B^{+})", 5.28, 5.0, 6.0, 0.01, false);
@@ -150,8 +150,10 @@ int main()
   //kernel output
   if (false)
     {
-      std::cout << "FULL KERNEL " << sum.prob_normalised()->get_kernel() << std::endl;
-      std::cout << "SIMPLIFIED KERNEL " << sum.prob_normalised()->simplify()->get_kernel() << std::endl;
+      morefit::EventVector<kernelT, evalT> eff;
+      sum.set_acceptance_histo(eff, {100});
+      std::cout << "FULL KERNEL " << std::endl << sum.prob_normalised_eff()->get_kernel("outfull = ") << ";" << std::endl;
+      std::cout << "SIMPLIFIED KERNEL " << std::endl << sum.prob_normalised_eff()->simplify()->get_kernel("outsimple = ") << ";" << std::endl;
 
       std::vector<std::string> param_names;
       std::vector<evalT> param_values;
@@ -161,8 +163,9 @@ int main()
 	  param_names.push_back(param->get_name());
 	  param_values.push_back(param->get_value());      
 	}
-      std::cout << "GEN KERNEL " << sum.prob_normalised()->substitute(param_names, param_values)->simplify()->get_kernel() << std::endl;
-      std::cout << "KERNEL NORM " << sum.norm()->substitute(param_names, param_values)->simplify()->get_kernel() << std::endl;
+      std::cout << "GEN KERNEL " << std::endl << sum.prob_normalised_eff()->substitute(param_names, param_values)->simplify()->get_kernel("outgen = ") << ";" << std::endl;
+      std::cout << "KERNEL NORM " << std::endl << sum.norm_eff()->substitute(param_names, param_values)->simplify()->get_kernel("outnorm = ") << ";" << std::endl;
+      return 0;
     }
   
   //crosscheck random number genreator
@@ -271,7 +274,7 @@ int main()
     }
 #endif  
   //toystudy for fit of multiple gaussians
-  if (true)
+  if (false)
     {
       compute_opts.llvm_vectorization = false;
       unsigned int ngaus = 20;
@@ -544,6 +547,61 @@ int main()
       return 0;
     }
 
+  //plotting with efficiencies check
+  if (true)
+    {
+      morefit::EventVector<kernelT, evalT> eff;
+      unsigned int nmbins = 100000;      
+      sum.set_acceptance_histo(eff, {nmbins});
+      for (unsigned int i=0; i<nmbins; i++)
+	{
+	  double mass = m.get_min() + (m.get_max()-m.get_min())/double(nmbins)*(i+0.5);
+	  eff(i,0) = 1.0+0.2*sin((mass - m.get_min())/(m.get_max()-m.get_min())*TMath::Pi()*2.0*2.0 );
+	}
+      
+      unsigned int ngen = 1000000;
+      morefit::generator_options gen_opts;
+      gen_opts.print();
+      morefit::generator<kernelT, evalT, backendT, blockT> gen(&gen_opts, &backend, &rnd);
+      morefit::EventVector<kernelT, evalT> result({&m}, ngen);  
+      gen.generate(ngen, &sum, params, result);      
+
+      std::cout <<"fitting" << std::endl;      
+      morefit::fitter_options opts;
+      opts.minuit_printlevel = 2;
+
+      //opts.analytic_gradient = true;
+      //opts.analytic_hessian = true;
+
+      //opts.parallelize_loops = true;
+      opts.parallelize_loops = false;
+      
+      opts.analytic_gradient = false;
+      opts.analytic_hessian = false;
+      opts.print();
+      morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
+      fit.fit(&sum, params, &result);
+      
+      morefit::plotter_options plot_opts;
+      //plot_opts.plotter = morefit::plotter_options::plotter_type::MatPlotLib;
+      plot_opts.plotter = morefit::plotter_options::plotter_type::Root;
+      plot_opts.print_level = 2;
+      plot_opts.plot_pulls = true;
+      plot_opts.pdf_bin_multiplier = 20;
+      morefit::plotter<kernelT,evalT, backendT, blockT> plot(&plot_opts, &backend);
+      //plot.plot(&sum, params, &result, "m", "plot_m.C", "C", 100);
+      //plot.plot(&sum, params, &result, "m", "plot_m.py", "py", 100);
+      plot.plot(&sum, params, &result, "m", "plot_m.eps", "eps", 100);
+
+      std::vector<std::string> param_names;
+      for (unsigned int i=0; i<params.size(); i++)
+	param_names.push_back(params.at(i)->get_name());
+      std::vector<double> param_values;
+      for (unsigned int i=0; i<params.size(); i++)
+	param_values.push_back(params.at(i)->get_value());
+
+      return 0;
+    }
   
   return 0;
 }

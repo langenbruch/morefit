@@ -17,6 +17,7 @@
 #include <memory>
 #include <array>
 #include <set>
+#include <limits>
 #include <math.h>
 #include <eigen3/Eigen/Dense>
 
@@ -46,6 +47,7 @@ namespace morefit {
     bool kahan_on_accelerator;
     int print_level;
     bool correct_weighted_fit;
+    bool parallelize_loops;
     //minuit options
     double minuit_strategy;
     int minuit_printlevel;
@@ -65,6 +67,7 @@ namespace morefit {
       kahan_on_accelerator(true),
       print_level(2),
       correct_weighted_fit(true),
+      parallelize_loops(false),
       minuit_strategy(2),
       minuit_printlevel(1),
       minuit_maxiterations(4000),
@@ -92,6 +95,7 @@ namespace morefit {
       std::cout << std::setw(width) << std::left << "  kahan on accelerator " << (kahan_on_accelerator ? "YES" : "NO") << std::endl;
       std::cout << std::setw(width) << std::left << "  print level " << print_level << std::endl;
       std::cout << std::setw(width) << std::left << "  correct weighted fit " << (correct_weighted_fit ? "YES" : "NO") << std::endl;
+      std::cout << std::setw(width) << std::left << "  parallelize loops " << (parallelize_loops ? "YES" : "NO") << std::endl;
       std::cout << "Minuit:" << std::endl;
       std::cout << std::setw(width) << std::left << "  minuit strategy " << minuit_strategy << std::endl;
       std::cout << std::setw(width) << std::left << "  minuit print level " << minuit_printlevel << std::endl;
@@ -206,6 +210,10 @@ namespace morefit {
     computeT grad_block_;
     computeT hessian_block_;
     computeT fisher_block_;
+    std::vector<std::unique_ptr<computeT>> loop_blocks_;
+    std::vector<dimension<evalT>> loop_res_dim_;
+    std::vector<EventVector<kernelT, evalT>*> loop_input_buffer_;    
+    std::vector<EventVector<kernelT, evalT>> loop_res_buffer_;    
     backendT* backend_;
     dimension<evalT> res_dim_;
     std::vector<dimension<evalT>> grad_res_dim_;
@@ -318,7 +326,7 @@ namespace morefit {
     }
     //generate kernels
     //could use member fields instead of arguments
-    bool make_kernels(PDF<kernelT, evalT>* pdf, std::vector<parameter<evalT>*> params, EventVector<kernelT, evalT>* data)
+    bool make_kernels(PDF<kernelT, evalT>* pdf, std::vector<parameter<evalT>*> params, EventVector<kernelT, evalT>* data, std::vector<EventVector<kernelT, evalT>*> other_data)
     {
       std::vector<std::string> fixed_params;
       std::vector<evalT> fixed_values;
@@ -333,9 +341,10 @@ namespace morefit {
 	if (!param->is_constant())
 	  floating_params.push_back(param->get_name());
 	  
-      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> logprob(pdf->logprob_normalised()->substitute(fixed_params, fixed_values)->simplify());
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> logprob(pdf->logprob_normalised_eff()->substitute(fixed_params, fixed_values)->simplify());
       if (data->event_weight_idx()!= -1)	
 	logprob = std::make_unique<ProdNode<kernelT, evalT>>(std::make_unique<VariableNode<kernelT,evalT>>(data->event_weight_name()), std::move(logprob));
+      
       //perform precalculations depending only on event, adding these as extra dimensions
       event_buffer_expressions_.clear();
       event_buffer_names_.clear();
@@ -355,11 +364,14 @@ namespace morefit {
 	    {
 	      std::cout << std::endl;
 	      for (unsigned int i=0; i<event_buffer_expressions_.size(); i++)
-		std::cout << "EVENTBUFFER " << event_buffer_names_.at(i) << " = " << event_buffer_expressions_.at(i)->get_kernel() << std::endl;
+		std::cout << "EVENTBUFFER " << event_buffer_names_.at(i) << ": " << std::endl << event_buffer_expressions_.at(i)->get_kernel(event_buffer_names_.at(i) + " = ") << std::endl;
 	      std::cout << std::endl;
 	    }
 	  //run kernel
+	  precompute_block_.PrepareOtherDataBuffers(other_data.size());  
 	  precompute_block_.SetupInputBuffer(data->buffer_size());
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    precompute_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
 	  std::vector<std::string> dummy;
 	  for (unsigned int i=data->get_dimensions().size(); i<event_buffer_names_.size(); i++)//add additional variables to buffer
 	    precompute_output_dimensions.push_back(dimension<evalT>(event_buffer_names_.at(i)));
@@ -367,7 +379,7 @@ namespace morefit {
 	  precompute_buffer_size = precompute_output_dimensions.size()*sizeof(kernelT)*data->nevents_padded();
 	  precompute_block_.SetupOutputBuffer(precompute_buffer_size);
 	  auto t_before_precompute_kernel = std::chrono::high_resolution_clock::now();
-	  precompute_block_.MakeComputeKernel("precompute_kernel", data->nevents(), data->copy_dimensions(), precompute_output_dimensions, dummy, event_buffer_expressions_);
+	  precompute_block_.MakeComputeKernel("precompute_kernel", data->nevents(), data->copy_dimensions(), precompute_output_dimensions, dummy, data, other_data, event_buffer_expressions_);
 	  precompute_block_.Finish();
 	  auto t_after_precompute_kernel = std::chrono::high_resolution_clock::now();
 	  if (opts_->print_level > 1)
@@ -386,9 +398,9 @@ namespace morefit {
 	    {
 	      std::cout << std::endl;
 	      for (unsigned int i=0; i<graphs.size(); i++)
-		std::cout << "GRAPHS: " << graphs.at(i)->get_kernel() << std::endl;
+		std::cout << "GRAPHS " << graphs.at(i)->get_kernel("graph"+std::to_string(i)+" = ") << std::endl;
 	      for (unsigned int i=0; i< buffer_expressions_.size(); i++)
-		std::cout << "BUFFER " << buffer_names_.at(i) << " = " << buffer_expressions_.at(i)->get_kernel() << std::endl;
+		std::cout << "BUFFER " << buffer_names_.at(i) << ": " << std::endl << buffer_expressions_.at(i)->get_kernel(buffer_names_.at(i) + " = ") << std::endl;
 	      std::cout << std::endl;
 	    }
 	}
@@ -410,9 +422,9 @@ namespace morefit {
 		{
 		  std::cout << std::endl;
 		  for (unsigned int i=0; i<grad_graphs.size(); i++)
-		    std::cout << "GRADGRAPH: " << grad_graphs.at(i)->get_kernel() << std::endl;
+		    std::cout << "GRADGRAPHS " << grad_graphs.at(i)->get_kernel("gradgraph"+std::to_string(i)+" = ") << std::endl;
 		  for (unsigned int i=0; i<grad_buffer_expressions_.size(); i++)
-		    std::cout << "GRADBUFFER: " << grad_buffer_names_.at(i) << " = " << grad_buffer_expressions_.at(i)->get_kernel() << std::endl;
+		    std::cout << "GRADBUFFER " << grad_buffer_names_.at(i) << ": " << std::endl << grad_buffer_expressions_.at(i)->get_kernel(grad_buffer_names_.at(i) + " = ") << std::endl;
 		  std::cout << std::endl;
 		}
 	    }
@@ -443,9 +455,9 @@ namespace morefit {
 		{
 		  std::cout << std::endl;
 		  for (unsigned int i=0; i<hessian_graphs.size(); i++)
-		    std::cout << "HESSIANGRAPH: " << hessian_graphs.at(i)->get_kernel() << std::endl;
+		    std::cout << "HESSIANGRADGRAPH " << hessian_graphs.at(i)->get_kernel("hessiangraph"+std::to_string(i)+" = ") << std::endl;
 		  for (unsigned int i=0; i<hessian_buffer_expressions_.size(); i++)
-		    std::cout << "HESSIANBUFFER: " << hessian_buffer_names_.at(i) << " = " << hessian_buffer_expressions_.at(i)->get_kernel() << std::endl;
+		    std::cout << "HESSIANBUFFER " << hessian_buffer_names_.at(i) << ": " << std::endl << hessian_buffer_expressions_.at(i)->get_kernel(hessian_buffer_names_.at(i) + " = ") << std::endl;
 		  std::cout << std::endl;
 		}
 	    }
@@ -463,7 +475,7 @@ namespace morefit {
 		{
 		  std::cout << std::endl;
 		  for (unsigned int i=0; i<hessian_graphs.size(); i++)
-		    std::cout << "HESSIANGRAPH: " << hessian_graphs.at(i)->get_kernel() << std::endl;
+		    std::cout << "HESSIANGRAPH " << hessian_graphs.at(i)->get_kernel("hessiangraph"+std::to_string(i)+" = ") << std::endl;
 		  std::cout << std::endl;
 		}
 	    }
@@ -493,9 +505,9 @@ namespace morefit {
 		{
 		  std::cout << std::endl;
 		  for (unsigned int i=0; i<fisher_graphs.size(); i++)
-		    std::cout << "FISHERGRAPH: " << fisher_graphs.at(i)->get_kernel() << std::endl;
+		    std::cout << "FISHERGRAPHS " << fisher_graphs.at(i)->get_kernel("fishergraph"+std::to_string(i)+" = ") << std::endl;
 		  for (unsigned int i=0; i<fisher_buffer_expressions_.size(); i++)
-		    std::cout << "FISHERBUFFER: " << fisher_buffer_names_.at(i) << " = " << fisher_buffer_expressions_.at(i)->get_kernel() << std::endl;
+		    std::cout << "FISHERBUFFER " << fisher_buffer_names_.at(i) << ": " << std::endl << fisher_buffer_expressions_.at(i)->get_kernel(fisher_buffer_names_.at(i) + " = ") << std::endl;
 		  std::cout << std::endl;
 		}
 	    }
@@ -516,21 +528,25 @@ namespace morefit {
 		{
 		  std::cout << std::endl;
 		  for (unsigned int i=0; i<fisher_graphs.size(); i++)
-		    std::cout << "FISHERGRAPH: " << fisher_graphs.at(i)->get_kernel() << std::endl;
+		    std::cout << "FISHERGRAPH " << fisher_graphs.at(i)->get_kernel("fishergraph"+std::to_string(i)+" = ") << std::endl;
 		  std::cout << std::endl;
 		}
 	    }
 	}
-
+      
       //set up buffers
       evalT maxprob = pdf->get_max();
       res_dim_.set_max(maxprob);
       res_buffer_.set_padding(data->is_padded(), data->padding());
       res_buffer_.resize(data->nevents());      
+      block_.PrepareOtherDataBuffers(other_data.size());  
       if (opts_->optimize_dimensions)
 	block_.SetupInputBuffer(&precompute_block_, false);
       else	
 	block_.SetupInputBuffer(data->buffer_size());
+      for (unsigned int i=0; i<other_data.size(); i++)
+	block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+
       if (opts_->kahan_on_accelerator)
 	block_.SetupKahanBuffer(sizeof(evalT));
       
@@ -547,10 +563,13 @@ namespace morefit {
 	    arg.push_back(&grad_res_dim_.at(i));
 	  grad_res_buffer_.add_dimensions(arg);
 	  grad_res_buffer_.resize(data->nevents());
+	  grad_block_.PrepareOtherDataBuffers(other_data.size());  
 	  if (opts_->optimize_dimensions)
 	    grad_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    grad_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    grad_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
 	  grad_block_.SetupOutputBuffer(grad_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  grad_block_.SetupParameterBuffer((floating_params.size()+grad_buffer_expressions_.size())*sizeof(kernelT));
 	  if (opts_->kahan_on_accelerator)
@@ -570,10 +589,13 @@ namespace morefit {
 	      
 	  hessian_res_buffer_.add_dimensions(arg);
 	  hessian_res_buffer_.resize(data->nevents());
+	  hessian_block_.PrepareOtherDataBuffers(other_data.size());  
 	  if (opts_->optimize_dimensions)
 	    hessian_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    hessian_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    hessian_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
 	  hessian_block_.SetupOutputBuffer(hessian_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  hessian_block_.SetupParameterBuffer((floating_params.size()+hessian_buffer_expressions_.size())*sizeof(kernelT));
 	  if (opts_->kahan_on_accelerator)
@@ -593,23 +615,82 @@ namespace morefit {
 	      
 	  fisher_res_buffer_.add_dimensions(arg);
 	  fisher_res_buffer_.resize(data->nevents());
+	  fisher_block_.PrepareOtherDataBuffers(other_data.size());  
 	  if (opts_->optimize_dimensions)
 	    fisher_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    fisher_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    fisher_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
 	  fisher_block_.SetupOutputBuffer(fisher_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  fisher_block_.SetupParameterBuffer((floating_params.size()+fisher_buffer_expressions_.size())*sizeof(kernelT));
 	  if (opts_->kahan_on_accelerator)
 	    fisher_block_.SetupKahanBuffer(fisher_res_buffer_.ndimensions()*sizeof(evalT));
 	}
-	  
+      //parallelise loops
+      std::vector<std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>> loop_graphs;
+      if (opts_->parallelize_loops)
+	{
+	  int nloops = 0;
+	  //clear existing
+	  loop_blocks_.clear();
+	  loop_res_buffer_.clear();
+	  loop_input_buffer_.clear();
+	  loop_res_dim_.clear();
+	  //currently only do it for the lh
+	  for (unsigned int i=0; i<buffer_expressions_.size(); i++)
+	    {
+	      LoopAndSumNode<kernelT, evalT>* las = dynamic_cast<LoopAndSumNode<kernelT, evalT>*>(buffer_expressions_.at(i).get());
+	      if (las != nullptr)
+		{
+		  if (opts_->print_level > 1)
+		    {
+		      std::vector<std::string> lines;
+		      las->get_kernel("", lines);
+		      std::cout << "Found LoopAndSum to optimize" << std::endl;
+		      for (unsigned int j=0; j<lines.size(); j++)
+			std::cout << lines.at(j) << std::endl;
+		    }
+		  loop_graphs.emplace_back(std::vector< std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>());
+		  loop_graphs.at(nloops).emplace_back(std::move(las->children_.at(0)->copy()));
+		  
+		  loop_res_dim_.push_back(dimension<evalT>("res", std::numeric_limits<evalT>::lowest(), std::numeric_limits<evalT>::max()));
+		  
+		  EventVector<kernelT, evalT>* loop_events = las->get_events();
+		  loop_input_buffer_.push_back(loop_events);
+		  loop_res_buffer_.push_back(EventVector<kernelT, evalT>());
+		  loop_res_buffer_.at(nloops).set_padding(loop_events->is_padded(), loop_events->padding());
+
+		  std::vector<dimension<evalT>*> arg;
+		  arg.push_back(&loop_res_dim_.at(nloops));
+		  loop_res_buffer_.at(nloops).add_dimensions(arg);
+		  loop_res_buffer_.at(nloops).resize(loop_events->nevents());
+		  
+		  loop_blocks_.emplace_back(new computeT(backend_));
+		  loop_blocks_.at(nloops)->PrepareOtherDataBuffers(other_data.size());
+		  if (opts_->optimize_dimensions)
+		    loop_blocks_.at(nloops)->SetupInputBuffer(&precompute_block_, false);
+		  else
+		    loop_blocks_.at(nloops)->SetupInputBuffer(&block_, true);
+		  for (unsigned int j=0; j<other_data.size(); j++)
+		    loop_blocks_.at(nloops)->SetupOtherDataBuffer(j, other_data.at(j)->buffer_size());
+		  loop_blocks_.at(nloops)->SetupOutputBuffer(loop_res_buffer_.at(nloops).buffer_size());
+		  loop_blocks_.at(nloops)->SetupParameterBuffer((floating_params.size())*sizeof(kernelT));
+		  if (opts_->kahan_on_accelerator)
+		    loop_blocks_.at(nloops)->SetupKahanBuffer(sizeof(evalT));
+		  
+		  nloops++;
+		}
+	    }
+	}
+      
       std::vector<std::string> paramnames(floating_params);
       for (auto buffer_name : buffer_names_)
 	paramnames.push_back(buffer_name);
 
       //make kernel
       auto t_before_kernel = std::chrono::high_resolution_clock::now();
-      block_.MakeComputeKernel("lh_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), res_buffer_.copy_dimensions(), paramnames, graphs, opts_->kahan_on_accelerator);
+      block_.MakeComputeKernel("lh_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), res_buffer_.copy_dimensions(), paramnames, data, other_data, graphs, opts_->kahan_on_accelerator);
       block_.Finish();
       auto t_after_kernel = std::chrono::high_resolution_clock::now();
 
@@ -621,7 +702,7 @@ namespace morefit {
 	  for (auto buffer_name : grad_buffer_names_)
 	    grad_paramnames.push_back(buffer_name);
 	  auto t_before_grad_kernel = std::chrono::high_resolution_clock::now();
-	  grad_block_.MakeComputeKernel("lh_grad_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), grad_res_buffer_.copy_dimensions(), grad_paramnames, grad_graphs, opts_->kahan_on_accelerator);
+	  grad_block_.MakeComputeKernel("lh_grad_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), grad_res_buffer_.copy_dimensions(), grad_paramnames, data, other_data, grad_graphs, opts_->kahan_on_accelerator);
 	  grad_block_.Finish();
 
 	  auto t_after_grad_kernel = std::chrono::high_resolution_clock::now();
@@ -634,7 +715,7 @@ namespace morefit {
 	  for (auto buffer_name : hessian_buffer_names_)
 	    hessian_paramnames.push_back(buffer_name);
 	  auto t_before_hessian_kernel = std::chrono::high_resolution_clock::now();
-	  hessian_block_.MakeComputeKernel("lh_hessian_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), hessian_res_buffer_.copy_dimensions(), hessian_paramnames, hessian_graphs, opts_->kahan_on_accelerator);
+	  hessian_block_.MakeComputeKernel("lh_hessian_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), hessian_res_buffer_.copy_dimensions(), hessian_paramnames, data, other_data, hessian_graphs, opts_->kahan_on_accelerator);
 	  hessian_block_.Finish();
 
 	  auto t_after_hessian_kernel = std::chrono::high_resolution_clock::now();
@@ -647,12 +728,29 @@ namespace morefit {
 	  for (auto buffer_name : fisher_buffer_names_)
 	    fisher_paramnames.push_back(buffer_name);
 	  auto t_before_fisher_kernel = std::chrono::high_resolution_clock::now();
-	  fisher_block_.MakeComputeKernel("lh_fisher_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), fisher_res_buffer_.copy_dimensions(), fisher_paramnames, fisher_graphs, opts_->kahan_on_accelerator);
+	  fisher_block_.MakeComputeKernel("lh_fisher_kernel", data->nevents(), opts_->optimize_dimensions ? precompute_output_dimensions : data->copy_dimensions(), fisher_res_buffer_.copy_dimensions(), fisher_paramnames, data, other_data, fisher_graphs, opts_->kahan_on_accelerator);
 	  fisher_block_.Finish();
 
 	  auto t_after_fisher_kernel = std::chrono::high_resolution_clock::now();
 	  if (opts_->print_level > 1)
 	    std::cout << "making fisher kernel takes " << std::chrono::duration<double, std::milli>(t_after_fisher_kernel-t_before_fisher_kernel).count() << " ms in total" << std::endl;
+	}
+      if (opts_->parallelize_loops)
+	{
+	  std::vector<std::string> loop_paramnames(floating_params);
+	  auto t_before_loop_kernel = std::chrono::high_resolution_clock::now();
+	  for (unsigned int i=0; i<loop_blocks_.size(); i++)
+	    {
+	      loop_blocks_.at(i)->MakeComputeKernel("lh_loop_kernel"+std::to_string(i), data->nevents(),
+						    loop_input_buffer_.at(i)->copy_dimensions(),
+						    loop_res_buffer_.at(i).copy_dimensions(),
+						    loop_paramnames, data, other_data, loop_graphs.at(i), opts_->kahan_on_accelerator);
+	      loop_blocks_.at(i)->Finish();
+	      
+	    }
+	  auto t_after_loop_kernel = std::chrono::high_resolution_clock::now();
+	  if (opts_->print_level > 1)
+	    std::cout << "making loop kernels takes " << std::chrono::duration<double, std::milli>(t_after_loop_kernel-t_before_loop_kernel).count() << " ms in total" << std::endl;
 	}
       return true;
     }
@@ -696,17 +794,27 @@ namespace morefit {
 	  std::cout << "backend does not require padding but input data is padded." << std::endl;
 	  assert(0);
 	}
+
+      //all event vectors except the data (eg. efficiencies)
+      std::vector<EventVector<kernelT, evalT>*> other_data;
+      pdf->logprob_normalised_eff()->collect_event_vector_pointers(other_data);
+
       //make the kernel only if necessary 
       if (!refit)
-	make_kernels(pdf, params, data);
-      
+	make_kernels(pdf, params, data, other_data);
+
       //copy actual data
       if (opts_->optimize_dimensions)
 	{
-	  precompute_block_.SetupInputBuffer(data->buffer_size());
+	  precompute_block_.SetupInputBuffer(0, data->buffer_size());
 	  precompute_block_.SetupOutputBuffer(precompute_output_dimensions_*sizeof(kernelT)*data->nevents_padded());
 	  precompute_block_.SetNevents(data->nevents(), data->nevents_padded());
 	  precompute_block_.CopyToInputBuffer(*data);
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    {
+	      precompute_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      precompute_block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	    }
 	  precompute_block_.SubmitKernel();
 	  precompute_block_.Finish();
 	}
@@ -718,6 +826,11 @@ namespace morefit {
 	block_.SetupInputBuffer(data->buffer_size());      
       block_.SetupOutputBuffer(res_buffer_.buffer_size());
       block_.SetNevents(data->nevents(), data->nevents_padded());
+      for (unsigned int i=0; i<other_data.size(); i++)//TODO: reduce copying if possible, only copy what is needed
+	{
+	  block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	  block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	}
       
       if (opts_->analytic_gradient)
 	{
@@ -727,6 +840,11 @@ namespace morefit {
 	    grad_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    grad_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)//TODO: reduce copying if possible, only copy what is needed
+	    {
+	      grad_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      grad_block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	    }
 	  grad_block_.SetupOutputBuffer(grad_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  grad_block_.SetNevents(data->nevents(), data->nevents_padded());
 	}
@@ -738,6 +856,11 @@ namespace morefit {
 	    hessian_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    hessian_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)//TODO: reduce copying if possible, only copy what is needed
+	    {
+	      hessian_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      hessian_block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	    }
 	  hessian_block_.SetupOutputBuffer(hessian_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  hessian_block_.SetNevents(data->nevents(), data->nevents_padded());
 	}
@@ -749,13 +872,38 @@ namespace morefit {
 	    fisher_block_.SetupInputBuffer(&precompute_block_, false);
 	  else
 	    fisher_block_.SetupInputBuffer(&block_, true);
+	  for (unsigned int i=0; i<other_data.size(); i++)//TODO: reduce copying if possible, only copy what is needed
+	    {
+	      fisher_block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      fisher_block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	    }
 	  fisher_block_.SetupOutputBuffer(fisher_res_buffer_.buffer_size());//still using this with kahan summation, does not seem to negatively affect performance
 	  fisher_block_.SetNevents(data->nevents(), data->nevents_padded());
 	}
-
+      if (opts_->parallelize_loops)
+	{
+	  for (unsigned int i=0; i<loop_blocks_.size(); i++)
+	    {
+	      loop_res_buffer_.at(i).set_padding(loop_input_buffer_.at(i)->is_padded(), loop_input_buffer_.at(i)->padding());
+	      loop_res_buffer_.at(i).resize(loop_input_buffer_.at(i)->nevents());
+	      loop_blocks_.at(i)->SetupInputBuffer(loop_input_buffer_.at(i)->buffer_size());	      
+	      for (unsigned int j=0; j<other_data.size(); j++)
+		{
+		  loop_blocks_.at(i)->SetupOtherDataBuffer(j, other_data.at(j)->buffer_size());
+		  loop_blocks_.at(i)->CopyToOtherDataBuffer(j, *(other_data.at(j)));
+		}
+	      loop_blocks_.at(i)->SetupOutputBuffer(loop_res_buffer_.at(i).buffer_size());
+	      loop_blocks_.at(i)->SetNevents(loop_input_buffer_.at(i)->nevents(), loop_input_buffer_.at(i)->nevents_padded());
+	      //NEW
+	      loop_blocks_.at(i)->CopyToInputBuffer(*(loop_input_buffer_.at(i)));
+	    }
+	}
+      
       if (!opts_->optimize_dimensions)
-	block_.CopyToInputBuffer(*data);
-            
+	  block_.CopyToInputBuffer(*data);
+      for (unsigned int i=0; i<other_data.size(); i++)
+	block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+      
       //setup minuit
       if (opts_->minimizer == fitter_options::minimizer_type::Minuit2)
 	{
@@ -1165,8 +1313,57 @@ namespace morefit {
 	    parameter_values.push_back(param->get_value());
 	    nfloating_parameters++;
 	  }
-      for (const auto& expression : buffer_expressions_)
-	parameter_buffer.push_back(expression->eval(parameter_names, parameter_values));
+      if (opts_->parallelize_loops)
+	{
+	  int loop_idx = 0;
+	  std::vector<kernelT> original_parameter_buffer(parameter_buffer);
+	  for (const auto& expression : buffer_expressions_)
+	    {
+	      LoopAndSumNode<kernelT, evalT>* las = dynamic_cast<LoopAndSumNode<kernelT, evalT>*>(expression.get());
+	      if (las != nullptr)
+		{
+		  auto t_before_loop = std::chrono::high_resolution_clock::now();
+		  loop_blocks_.at(loop_idx)->CopyToParameterBuffer(original_parameter_buffer);
+		  loop_blocks_.at(loop_idx)->SubmitKernel();
+		  loop_blocks_.at(loop_idx)->Finish();
+
+		  if (!opts_->kahan_on_accelerator)
+		    loop_blocks_.at(loop_idx)->CopyFromOutputBuffer(res_buffer_);
+		  evalT result = 0.0;
+		  std::vector<evalT> kahan_sum(1);
+		  if (opts_->kahan_on_accelerator)
+		    {
+		      loop_blocks_.at(loop_idx)->CopyFromKahanBuffer(kahan_sum);
+		      result = kahan_sum.at(0);
+		    }
+		  else
+		    {
+		      result = kahan_summation<evalT,kernelT>(loop_res_buffer_.at(loop_idx), 0);
+		      if (std::isnan(result))
+			{
+			  std::cout << "Kahan summation returns NaN" << std::endl;
+			  for (auto p : params)
+			    std::cout <<"parameter values: " << p->get_name() << " " << p->get_value() << std::endl;
+			  res_buffer_.print();
+			  assert(0);
+			}
+		    }		  		  
+		  loop_idx++;
+		  parameter_buffer.push_back(result);
+		  auto t_after_loop = std::chrono::high_resolution_clock::now();
+		  if (opts_->print_level > 1)
+		    std::cout << "parallelized loop took " << std::chrono::duration<double, std::milli>(t_after_loop-t_before_loop).count() << " ms in total" << std::endl;
+		}
+	      else
+		parameter_buffer.push_back(expression->eval(parameter_names, parameter_values));
+	    }
+	}
+      else
+	{
+	  for (const auto& expression : buffer_expressions_)
+	    parameter_buffer.push_back(expression->eval(parameter_names, parameter_values));
+	}
+      
       auto t_after_paramcalc = std::chrono::high_resolution_clock::now();
       if (opts_->print_level > 1)
 	std::cout << "param calc (lh) takes " << std::chrono::duration<double, std::milli>(t_after_paramcalc-t_before_paramcalc).count() << " ms in total" << std::endl;

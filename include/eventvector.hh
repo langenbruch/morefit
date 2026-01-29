@@ -27,20 +27,54 @@
 #include "dimensionvector.hh"
 
 namespace morefit {
+
+  class IDCreator {
+  public:
+    static IDCreator* Instance();
+    long long unsigned int get_ID()
+    {
+      counter_++;
+      return counter_;
+    }
+    std::string get_name()
+    {
+      return std::to_string(get_ID());
+    }
+    IDCreator(IDCreator& c) = delete;
+    void operator=(const IDCreator& c) = delete;
+  protected:
+    IDCreator(): counter_(0) {};
+  private:
+    static IDCreator* instance_;
+    long long unsigned int counter_;
+  };
+  
+  IDCreator* IDCreator::instance_ = nullptr;
+
+  IDCreator* IDCreator::Instance()
+  {
+    if (instance_ == nullptr)
+      instance_ = new IDCreator();
+    return instance_;
+  }
+  
   
   template<typename kernelT, typename evalT=double> 
   class EventVector {//SoA
   private:
+    std::string name_;
     unsigned int nevents_;
-    std::vector<dimension<evalT>*> dimensions_; 
+    std::vector<dimension<evalT>*> dimensions_;
     unsigned int padding_;
     bool padded_;
     int weight_idx_;
     kernelT* data_;
   public:
     EventVector()://empty event vector
+      name_("morefit_eventvector_"+IDCreator::Instance()->get_name()),
       nevents_(0),
-      padding_(false),
+      dimensions_(),
+      padding_(0),
       padded_(false),
       weight_idx_(-1),
       data_(nullptr)
@@ -48,6 +82,7 @@ namespace morefit {
     }
     EventVector(std::vector<dimension<evalT>*> dimensions, 
 		unsigned int nevents=0, bool padded=false, int padding=0):
+      name_("morefit_eventvector_"+IDCreator::Instance()->get_name()),
       nevents_(nevents),
       dimensions_(dimensions),
       padding_(padding),
@@ -57,11 +92,13 @@ namespace morefit {
     {
     }
     EventVector(const EventVector<kernelT, evalT>& rhs):
+      name_("morefit_eventvector_"+IDCreator::Instance()->get_name()),
       nevents_(rhs.nevents_),
       dimensions_(rhs.dimensions_),
       padding_(rhs.padding_),
       padded_(rhs.padded_),
-      weight_idx_(-1)
+      weight_idx_(rhs.weight_idx_),
+      data_(nullptr)
     {
       if (rhs.dimensions_.size()*rhs.nevents_ > 0)
 	{
@@ -94,6 +131,10 @@ namespace morefit {
     int event_weight_idx() const
     {
       return weight_idx_;
+    }
+    std::string get_name() const
+    {
+      return name_;
     }
     std::string event_weight_name() const
     {
@@ -206,16 +247,19 @@ namespace morefit {
       unsigned int padded_nevents = padded_ ? nevents_padded(nevents_) : nevents_;
       std::vector<dimension<evalT>*> all_dimensions(dimensions_);
       all_dimensions.insert(all_dimensions.end(), new_dimensions.begin(), new_dimensions.end());
+      
       kernelT* new_data = nullptr;
       if (all_dimensions.size()*padded_nevents > 0)
 	new_data = new kernelT[all_dimensions.size()*padded_nevents];//nb. values for new dimension not initialised
-      std::copy(data_, data_+dimensions_.size()*padded_nevents, new_data);
       if (data_)
-	delete[] data_;
+	{
+	  std::copy(data_, data_+dimensions_.size()*padded_nevents, new_data);
+	  delete[] data_;
+	}
       if (new_data)
 	data_ = new_data;
-      dimensions_ = all_dimensions;      
-    }
+      dimensions_ = all_dimensions;
+    }    
     //return buffer size in bytes
     unsigned int buffer_size() const
     {

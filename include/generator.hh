@@ -72,6 +72,10 @@ namespace morefit {
     {
       auto t_before_generation = std::chrono::high_resolution_clock::now();     
       evalT maxprob = prob->get_max();
+      //collect event vectors
+      std::vector<EventVector<kernelT, evalT>*> other_data;
+      prob->prob_normalised_eff()->collect_event_vector_pointers(other_data);
+
       if (opts_->rndtype == generator_options::randomization_type::on_accelerator)//random number generation on accelerator
 	{
 	  result.resize(nevents);
@@ -130,12 +134,10 @@ namespace morefit {
 		  xoshiro->jump();
 		}
 	    }	  
-	  //set up buffers
-	  block_.SetupSeedBuffer(input_buffer.buffer_size());	  
-	  block_.SetupOutputBuffer(result.buffer_size());
 	  block_.SetNevents(result.nevents(), result.nevents_padded());
 	  if (!regen)
 	    {
+	      block_.PrepareOtherDataBuffers(other_data.size());
 	      //prepare kernel
 	      std::vector<std::string> param_names;
 	      std::vector<evalT> param_values;
@@ -145,20 +147,27 @@ namespace morefit {
 		  param_values.push_back(param->get_value());      
 		}
 	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> graphs;
-	      graphs.emplace_back(std::move(prob->prob_normalised()->substitute(param_names, param_values)->simplify()));
+	      graphs.emplace_back(std::move(prob->prob_normalised_eff()->substitute(param_names, param_values)->simplify()));
 	      if (opts_->print_level > 1)
 		{
 		  //print graph of generator pdf
 		  //graphs.at(0)->draw("gen_graph.tex");
 		}
 	      std::vector<std::string> dummy;
-
+	      
 	      auto t_before_making = std::chrono::high_resolution_clock::now();
-	      block_.MakeGenerateKernel("gen_kernel", nevents, input_buffer.copy_dimensions(), result.copy_dimensions(), dummy, graphs, maxprob);
+	      block_.MakeGenerateKernel("gen_kernel", nevents, input_buffer.copy_dimensions(), result.copy_dimensions(), dummy, other_data, graphs, maxprob);
 	      auto t_after_making = std::chrono::high_resolution_clock::now();
 	      if (opts_->print_level > 1)
 		std::cout << "making generate kernel took " << std::chrono::duration<double, std::milli>(t_after_making-t_before_making).count() << " ms in total" << std::endl;
-
+	    }
+	  //set up buffers
+	  block_.SetupSeedBuffer(input_buffer.buffer_size());	  
+	  block_.SetupOutputBuffer(result.buffer_size());
+	  for (int i=0; i<other_data.size(); i++)
+	    {
+	      block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
 	    }
 	  block_.Finish();
 	  auto t_before_launch = std::chrono::high_resolution_clock::now(); 
@@ -189,15 +198,15 @@ namespace morefit {
 	  gen_buffer.resize(chunksize);
 	  if (localworksize > 0)
 	    result.set_padding(true, localworksize);
+
 	  dimension res("res", 0.0, maxprob);
 	  EventVector<kernelT, evalT> res_buffer({&res});
 	  res_buffer.resize(chunksize);
 	  if (localworksize > 0)
 	    res_buffer.set_padding(true, localworksize);
-	  //set up buffers
-	  block_.SetupInputBuffer(gen_buffer.buffer_size());
-	  block_.SetupOutputBuffer(res_buffer.buffer_size());
 	  block_.SetNevents(res_buffer.nevents(), res_buffer.nevents_padded());
+	  
+	  block_.PrepareOtherDataBuffers(other_data.size());  
 	  if (!regen)
 	    {
 	      //prepare kernel
@@ -209,10 +218,20 @@ namespace morefit {
 		  param_values.push_back(param->get_value());      
 		}
 	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> graphs;
-	      graphs.emplace_back(std::move(prob->prob_normalised()->substitute(param_names, param_values)->simplify()));
+	      graphs.emplace_back(std::move(prob->prob_normalised_eff()->substitute(param_names, param_values)->simplify()));
 	      std::vector<std::string> dummy;
-	      block_.MakeComputeKernel("gen_kernel", chunksize, gen_buffer.copy_dimensions(), res_buffer.copy_dimensions(), dummy, graphs);
+	      block_.MakeComputeKernel("gen_kernel", chunksize, gen_buffer.copy_dimensions(), res_buffer.copy_dimensions(), dummy, &gen_buffer, other_data, graphs);
 	    }
+
+	  //set up buffers
+	  block_.SetupInputBuffer(gen_buffer.buffer_size());
+	  block_.SetupOutputBuffer(res_buffer.buffer_size());
+	  for (unsigned int i=0; i<other_data.size(); i++)
+	    {
+	      block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	      block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	    }
+
 	  block_.Finish();      
 	  bool finished = false;
 	  int chunkid = 0;

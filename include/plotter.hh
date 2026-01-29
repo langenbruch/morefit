@@ -135,7 +135,7 @@ namespace morefit {
       ranges_buffer_({&from_dim_, &to_dim_})
     {
     }
-    bool make_kernels(PDF<kernelT, evalT>* pdf, std::vector<parameter<evalT>*> params, EventVector<kernelT, evalT>* data)
+    bool make_kernels(PDF<kernelT, evalT>* pdf, std::vector<parameter<evalT>*> params, EventVector<kernelT, evalT>* data, std::vector<EventVector<kernelT, evalT>*> other_data)
     {
       std::vector<std::string> floating_params;
       for (auto param : params)
@@ -168,11 +168,11 @@ namespace morefit {
 	    variable_from = dims.at(i)->get_from_name();
 	    variable_to = dims.at(i)->get_to_name();
 	  }
-
-      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral = pdf->definite_integral()->substitute(param_names, param_values)->simplify();
-      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral = definite_integral->substitute(dimensions_names, dimensions_values)->simplify();
-      integral->rename_variable(variable_from, "morefit_from");
-      integral->rename_variable(variable_to, "morefit_to");
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral_unnormalised = pdf->definite_integral_eff()->substitute(param_names, param_values)->simplify();
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral_unnormalised = definite_integral_unnormalised->substitute(dimensions_names, dimensions_values)->simplify();      
+      integral_unnormalised->rename_variable(variable_from, "morefit_from");//problem might actually be this, should not replace names in normalisation, only in numerator!
+      integral_unnormalised->rename_variable(variable_to, "morefit_to");
+      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral = std::move(integral_unnormalised)/std::move(pdf->norm_eff()->substitute(param_names, param_values)->simplify());
       
       //potential optimisations kernel on expressions depending only on parameters
       buffer_expressions_.clear();
@@ -186,9 +186,9 @@ namespace morefit {
 	    {
 	      std::cout << std::endl;
 	      for (unsigned int i=0; i<graphs.size(); i++)
-		std::cout << "GRAPHS: " << graphs.at(i)->get_kernel() << std::endl;
+		std::cout << "GRAPHS " << graphs.at(i)->get_kernel("graph"+std::to_string(i)+" = ") << std::endl;
 	      for (unsigned int i=0; i< buffer_expressions_.size(); i++)
-		std::cout << "BUFFER " << buffer_names_.at(i) << " = " << buffer_expressions_.at(i)->get_kernel() << std::endl;
+		std::cout << "BUFFER " << buffer_names_.at(i) << ": " << std::endl << buffer_expressions_.at(i)->get_kernel(buffer_names_.at(i) + " = ") << std::endl;
 	      std::cout << std::endl;
 	    }
 	}
@@ -197,6 +197,13 @@ namespace morefit {
 
       //set up buffers
       block_.SetupInputBuffer(ranges_buffer_.buffer_size());
+      block_.PrepareOtherDataBuffers(other_data.size());
+      for (unsigned int i=0; i<other_data.size(); i++)
+	{
+	  block_.SetupOtherDataBuffer(i, other_data.at(i)->buffer_size());
+	  block_.CopyToOtherDataBuffer(i, *(other_data.at(i)));
+	}
+
       block_.SetupOutputBuffer(res_buffer_.buffer_size());
       block_.SetupParameterBuffer((floating_params.size()+buffer_expressions_.size())*sizeof(kernelT));
 	  
@@ -206,7 +213,7 @@ namespace morefit {
 
       //make kernel
       auto t_before_kernel = std::chrono::high_resolution_clock::now();
-      block_.MakeComputeKernel("integral_kernel", ranges_buffer_.nevents(), ranges_buffer_.copy_dimensions(), res_buffer_.copy_dimensions(), paramnames, graphs, false);
+      block_.MakeComputeKernel("integral_kernel", ranges_buffer_.nevents(), ranges_buffer_.copy_dimensions(), res_buffer_.copy_dimensions(), paramnames, data, other_data, graphs, false);
       block_.Finish();
       auto t_after_kernel = std::chrono::high_resolution_clock::now();
 
@@ -258,14 +265,18 @@ namespace morefit {
 	  ranges_buffer_(i,0) = from;
 	  ranges_buffer_(i,1) = to;
 	}
+      //all event vectors except the data (eg. efficiencies)
+      std::vector<EventVector<kernelT, evalT>*> other_data;
+      pdf->logprob_normalised_eff()->collect_event_vector_pointers(other_data);
+
       //make the kernel only if necessary 
       if (!replot)
-	make_kernels(pdf, params, data);
+	make_kernels(pdf, params, data, other_data);
 
-      block_.SetupInputBuffer(ranges_buffer_.buffer_size());      
+      block_.SetupInputBuffer(ranges_buffer_.buffer_size());
       block_.SetupOutputBuffer(res_buffer_.buffer_size());
       block_.SetNevents(ranges_buffer_.nevents(), ranges_buffer_.nevents_padded());
-      block_.CopyToInputBuffer(ranges_buffer_);
+      block_.CopyToInputBuffer(ranges_buffer_);//TODO FIXME
 
       std::vector<std::string> parameter_names;
       std::vector<evalT> parameter_values;
@@ -296,6 +307,7 @@ namespace morefit {
       std::vector<evalT> pdf_y(npdf_bins, 0.0);
       for (unsigned int i=0; i<npdf_bins;i++)
 	pdf_y.at(i) = res_buffer_(i, 0);
+      
       std::vector<evalT> pdf_dy(npdf_bins, 0.0);
       //data
       std::vector<evalT> y(nbins, 0.0);

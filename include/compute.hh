@@ -110,12 +110,8 @@ namespace morefit {
   template<typename kernelT, typename evalT, typename seedT=uint32_t> 
   class ComputeBlock {
   public:
-    //allocate input buffer on accelerator
-    virtual bool SetupInputBuffer(unsigned long int nbytes) = 0;
     //allocate buffer for PRNG seeds on accelerator
     virtual bool SetupSeedBuffer(unsigned long int nbytes) = 0;
-    //allocate input buffer on accelerator TODO
-    virtual bool SetupInputBuffer(ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) = 0;
     //allocate parameter buffer on accelerator
     virtual bool SetupParameterBuffer(unsigned long int nbytes) = 0;
     //allocate output buffer on accelerator
@@ -125,8 +121,6 @@ namespace morefit {
     //(re)setting the number of events
     virtual bool SetNevents(int nevents, int nevents_padded=-1) { return false;}
     //copy data from host to input buffer of accelerator
-    virtual bool CopyToInputBuffer(const EventVector<kernelT, evalT>& data) = 0;
-    //copy data from host to input buffer of accelerator
     virtual bool CopyToSeedBuffer(const EventVector<seedT, evalT>& data) = 0;
     //copy parameters from host to parameter buffer of accelerator
     virtual bool CopyToParameterBuffer(const std::vector<kernelT>& params) = 0;
@@ -134,12 +128,29 @@ namespace morefit {
     virtual bool CopyFromOutputBuffer(EventVector<kernelT, evalT>& data) = 0;
     //copy output from kahan summation from accelerator to host (if provided)
     virtual bool CopyFromKahanBuffer(std::vector<evalT>& kahan_sums) {return false;}
+    //compilation of compute kernel with specific input and output signature, also need to be able to access potentially multiple event vectors of data, parallelize over the first
+    virtual bool MakeComputeKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature, std::vector<dimension<evalT>> output_signature, 
+     				   const std::vector<std::string>& params, EventVector<kernelT,evalT>* input, const std::vector<EventVector<kernelT,evalT>*> other_data,
+     				   const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) = 0;
     //compilation of generation kernel with specific input and output signature
     virtual bool MakeGenerateKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature, 
-				    const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) {return true;}
-    //compilation of compute kernel with specific input and output signature
-    virtual bool MakeComputeKernel(std::string name, unsigned int nevents, std::vector<dimension<evalT>> input_signature,  std::vector<dimension<evalT>> output_signature, 
-				   const std::vector<std::string>& params, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, bool kahan_summation=false) = 0;
+				    const std::vector<std::string>& params, const std::vector<EventVector<kernelT,evalT>*> other_data,
+				    const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& graphs, evalT maxprob=1.0) = 0;
+    //set number of input buffers to use, eg. for efficiencies
+    virtual bool PrepareOtherDataBuffers(int nbuffers) = 0;
+    //allocate input buffers on accelerator
+    virtual bool SetupOtherDataBuffer(int idx, unsigned long int nbytes) = 0;    
+    //allocate input buffer on accelerator
+    virtual bool SetupOtherDataBuffer(int idx, ComputeBlock<kernelT, evalT>* other_data, bool use_data_in=false) = 0;
+    //allocate input buffers on accelerator
+    virtual bool SetupInputBuffer(unsigned long int nbytes) = 0;    
+    //allocate input buffer on accelerator
+    virtual bool SetupInputBuffer(ComputeBlock<kernelT, evalT>* input, bool use_data_in=false) = 0;
+    //input buffers can either be set to use the output of previous kernels or as new data that will need to be copied in
+    //copy data from host to input buffers of accelerator
+    virtual bool CopyToInputBuffer(const EventVector<kernelT, evalT>& data) = 0;
+    //copy data from host to input buffers of accelerator
+    virtual bool CopyToOtherDataBuffer(int idx, const EventVector<kernelT, evalT>& data) = 0;
     //submit kernel
     virtual bool SubmitKernel() = 0;
     //make sure computation is finished
