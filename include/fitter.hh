@@ -806,7 +806,7 @@ namespace morefit {
       //copy actual data
       if (opts_->optimize_dimensions)
 	{
-	  precompute_block_.SetupInputBuffer(0, data->buffer_size());
+	  precompute_block_.SetupInputBuffer(data->buffer_size());
 	  precompute_block_.SetupOutputBuffer(precompute_output_dimensions_*sizeof(kernelT)*data->nevents_padded());
 	  precompute_block_.SetNevents(data->nevents(), data->nevents_padded());
 	  precompute_block_.CopyToInputBuffer(*data);
@@ -960,9 +960,17 @@ namespace morefit {
 	      };
 	      minuit_two->SetHessianFunction(hessianFcn);
 	    }
-	  minuit_two->Minimize();	  
+	  minuit_two->Minimize();
+	  auto t_after_migrad = std::chrono::high_resolution_clock::now();
+	  if (opts_->print_level > 1)
+	    std::cout << "migrad for " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_migrad-t_before_fit).count() << " ms in total" << std::endl;
+
 	  if (opts_->postrun_hesse)
 	    minuit_two->Hesse();
+	  auto t_after_hesse = std::chrono::high_resolution_clock::now();
+	  if (opts_->print_level > 1 && opts_->postrun_hesse)
+	    std::cout << "hesse for " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_hesse-t_after_migrad).count() << " ms in total" << std::endl;
+
 	  result = minuit_two->Status();
 	  status_cov = minuit_two->CovMatrixStatus();
 	  if (status_cov == 3)

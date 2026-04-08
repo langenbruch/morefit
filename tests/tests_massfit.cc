@@ -551,6 +551,7 @@ int main()
   if (true)
     {
       morefit::EventVector<kernelT, evalT> eff;
+      /*
       unsigned int nmbins = 100000;      
       sum.set_acceptance_histo(eff, {nmbins});
       for (unsigned int i=0; i<nmbins; i++)
@@ -558,6 +559,25 @@ int main()
 	  double mass = m.get_min() + (m.get_max()-m.get_min())/double(nmbins)*(i+0.5);
 	  eff(i,0) = 1.0+0.2*sin((mass - m.get_min())/(m.get_max()-m.get_min())*TMath::Pi()*2.0*2.0 );
 	}
+      */
+#ifdef WITH_ROOT
+      TFile* bdt_file = new TFile("test_mass.root", "READ");
+      TTree* tree = (TTree*)bdt_file->Get("xgboost_regression");
+      unsigned int nnodes = tree->GetEntries();      
+      sum.set_acceptance_bdt(eff, nnodes);
+      double value, m_from, m_to;
+      tree->SetBranchAddress("f0_from", &m_from);
+      tree->SetBranchAddress("f0_to", &m_to);
+      tree->SetBranchAddress("value", &value);
+      for (unsigned int i=0; i<tree->GetEntries(); i++)
+	{
+	  tree->GetEntry(i);
+	  eff(i,0) = value;
+	  eff(i,1) = m_from;
+	  eff(i,2) = m_to;
+	}
+      eff.print();
+#endif      
       
       unsigned int ngen = 1000000;
       morefit::generator_options gen_opts;
@@ -573,8 +593,8 @@ int main()
       //opts.analytic_gradient = true;
       //opts.analytic_hessian = true;
 
-      //opts.parallelize_loops = true;
-      opts.parallelize_loops = false;
+      opts.parallelize_loops = true;
+      //opts.parallelize_loops = false;
       
       opts.analytic_gradient = false;
       opts.analytic_hessian = false;

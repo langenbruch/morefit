@@ -233,8 +233,10 @@ int main()
 
   //check plotting with efficiencies
   if (true)
-    {      
+    {
+      
       morefit::EventVector<kernelT, evalT> eff;
+      /*
       unsigned int nctlbins = 100;      
       unsigned int nctkbins = 100;      
       unsigned int nphibins = 100;      
@@ -251,7 +253,40 @@ int main()
 	    *(1.0+0.3*sin(phi_*10.0))/1.3;
 	  
 	  eff(i, 0) = eff_;
-	}      
+	}
+      */
+#ifdef WITH_ROOT
+      TFile* bdt_file = new TFile("test_kstarmumu.root", "READ");
+      TTree* tree = (TTree*)bdt_file->Get("xgboost_regression");
+      unsigned int nnodes = tree->GetEntries();      
+      kstarmumu.set_acceptance_bdt(eff, nnodes);
+      double value, ctl_from, ctl_to, ctk_from, ctk_to, phi_from, phi_to;
+      tree->SetBranchAddress("f0_from", &ctl_from);
+      tree->SetBranchAddress("f0_to", &ctl_to);
+      tree->SetBranchAddress("f1_from", &ctk_from);
+      tree->SetBranchAddress("f1_to", &ctk_to);
+      tree->SetBranchAddress("f2_from", &phi_from);
+      tree->SetBranchAddress("f2_to", &phi_to);
+      tree->SetBranchAddress("value", &value);
+      for (unsigned int i=0; i<tree->GetEntries(); i++)
+	{
+	  tree->GetEntry(i);
+	  eff(i,0) = value;
+	  eff(i,1) = ctl_from;
+	  eff(i,2) = ctl_to;
+	  eff(i,3) = ctk_from;
+	  eff(i,4) = ctk_to;
+	  eff(i,5) = phi_from;
+	  eff(i,6) = phi_to;
+	}
+      eff.print();
+#endif      
+      /*      
+      morefit::EventVector<kernelT, evalT> montecarlo;
+      kstarmumu.prepare_monte_carlo(montecarlo, 1000000);
+      //montecarlo.print();
+      */
+      
       unsigned int ngen = 1000000;
       std::cout <<"generating" << std::endl;
       morefit::generator_options gen_opts;
@@ -270,11 +305,12 @@ int main()
 
       opts.parallelize_loops = true;
       //opts.parallelize_loops = false;
-
+      opts.optimize_dimensions = true;
+      
       opts.print();
       morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
       fit.fit(&kstarmumu, params, &result);
-
+      
       
       morefit::plotter_options plot_opts;
       //plot_opts.plotter = morefit::plotter_options::plotter_type::MatPlotLib;
@@ -287,14 +323,14 @@ int main()
       plot.plot(&kstarmumu, params, &result, "ctk", "plot_ctk.eps", "eps", 100);
       plot.plot(&kstarmumu, params, &result, "phi", "plot_phi.eps", "eps", 100);
       
-      
+      /*
       std::vector<std::string> param_names;
       for (unsigned int i=0; i<params.size(); i++)
 	param_names.push_back(params.at(i)->get_name());
       std::vector<double> param_values;
       for (unsigned int i=0; i<params.size(); i++)
 	param_values.push_back(params.at(i)->get_value());
-      
+      */
       return 0;
     }
   

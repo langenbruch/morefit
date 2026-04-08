@@ -74,11 +74,11 @@ namespace morefit {
 	+ c->copy() * sin2thetak->copy() * sin2thetal->copy() * sinphi->copy() * Variable_(S8()->get_name())
 	+ c->copy() * sinthetak2->copy() * sinthetal2->copy() * sin2phi->copy() * Variable_(S9()->get_name())
 	;
-    }
+    }    
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const override
     {
       return Constant<kernelT, evalT>(1.0);
-    }
+    }    
   virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override 
     {
       //to avoid typing template arguments
@@ -210,6 +210,11 @@ namespace morefit {
     {
       return 9.0/32.0/M_PI*(4.0 + fabs(S3()->get_value()) + fabs(S4()->get_value()) + fabs(S5()->get_value()) + 4.0/3.0*fabs(Afb()->get_value())
 			    + fabs(S7()->get_value()) + fabs(S8()->get_value()) + fabs(S9()->get_value()));
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+      //return false;
     }
   };
 

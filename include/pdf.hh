@@ -23,6 +23,7 @@
 #include "graph.hh"
 #include "eventvector.hh"
 #include "parametervector.hh"
+#include "random.hh"
 
 namespace morefit {
 
@@ -32,13 +33,42 @@ namespace morefit {
     std::vector<dimension<evalT>*> dimensions_;//pointers allow settings to be changed (eg. change min/max) after object (in this case pdf) creation
     std::vector<parameter<evalT>*> parameters_;//pointers allow settings to be changed (eg. fix parameters) after object (in this case pdf) creation
     std::vector<PDF<kernelT, evalT>*> children_;
-    bool has_acceptance_{false};
+    //bool has_acceptance_{false};    
     enum acceptance_type {none, histogram, bdt};
     acceptance_type acceptance_type_{acceptance_type::none};
+    enum montecarlo_type {flat, importance_sampling};
+    montecarlo_type montecarlo_type_{montecarlo_type::flat};
     EventVector<kernelT, evalT>* acceptance_vector_{nullptr};
+    EventVector<kernelT, evalT>* montecarlo_vector_{nullptr};//TODO are there advantages of owning the vector? both for acceptance and montecarlo should be possible?
+    //do we really need to change dimensions on the fly? is everything not known at compile-time?
     std::vector<int> acceptance_bins_;
     std::vector<dimension<evalT>> acceptance_dims_;
+    std::vector<dimension<evalT>> montecarlo_dims_;
   public:
+    void prepare_monte_carlo(EventVector<kernelT, evalT>& montecarlo_vector, int nsamples)
+    {
+      //std::vector<dimension<evalT>> montecarlo_dims_;
+      montecarlo_dims_.clear();
+      //montecarlo_dims_.push_back(dimension<evalT>("morefit_numerator", 0.0, 1.0));//could do this for importance sampling
+      for (int i=0; i<this->dimensions_.size(); i++)
+	{
+	  montecarlo_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	  //montecarlo_dims_.push_back(dimension<evalT>(this->dimensions_.at(i)->get_to_name()+"_loop", this->dimensions_.at(i)->get_min(), this->dimensions_.at(i)->get_max()));
+	}
+      std::vector<dimension<evalT>*> arg;
+      for (int i=0; i<montecarlo_dims_.size(); i++)
+	arg.push_back(&montecarlo_dims_.at(i));
+      montecarlo_vector.add_dimensions(arg);
+
+      montecarlo_vector.resize(nsamples);
+      uint64_t seed[4] = {uint64_t(987364), uint64_t(1354987), uint64_t(2680409), uint64_t(826521243)}; 
+      Xoshiro256pp rnd(seed);//TODO move this to central
+      for (unsigned j=0; j<nsamples; j++)
+	for (unsigned int i=0; i<this->dimensions_.size(); i++)
+	  montecarlo_vector.operator()(j, i) = rnd.random()*(this->dimensions_.at(i)->get_max()-this->dimensions_.at(i)->get_min())+this->dimensions_.at(i)->get_min();//initialisation
+      montecarlo_vector_ = &montecarlo_vector;
+      montecarlo_type_ = montecarlo_type::flat;
+    }
     void set_acceptance_bdt(EventVector<kernelT, evalT>& acceptance_vector, int nnodes)
     {
       acceptance_dims_.clear();
@@ -130,10 +160,8 @@ namespace morefit {
     {
       return dimensions_.at(idx).get_max();
     }
-    virtual evalT get_max() const
-    {
-      return -1.0;
-    }
+    virtual evalT get_max() const = 0;
+    virtual bool provides_analytic_norm() const = 0;//needs to implement this, if false is returned will perform monte carlo integration
     //returns efficiency depending on dimension variables
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> efficiency() const
     {
@@ -208,18 +236,28 @@ namespace morefit {
       case acceptance_type::histogram:
       case acceptance_type::bdt://should be identical to above
 	{
-	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
-	  std::vector<std::string> names;
-	  for (int i=0; i<this->dimensions_.size(); i++)
+	  if (this->provides_analytic_norm())
 	    {
-	      names.push_back(this->dimensions_.at(i)->get_from_name());
-	      replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_from_name()+"_loop"));
-	      names.push_back(this->dimensions_.at(i)->get_to_name());
-	      replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_to_name()+"_loop"));
+	      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
+	      std::vector<std::string> names;
+	      for (int i=0; i<this->dimensions_.size(); i++)
+		{
+		  names.push_back(this->dimensions_.at(i)->get_from_name());
+		  replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_from_name()+"_loop"));
+		  names.push_back(this->dimensions_.at(i)->get_to_name());
+		  replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_to_name()+"_loop"));
+		}
+	      std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral()->substitute(names, replacements));
+	      return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
+								     Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(integral));
 	    }
-	  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral()->substitute(names, replacements));
-	  return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
-								 Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(integral));
+	  else//numeric integration
+	    {
+	      //assert(0);
+	      //TODO implement
+	      //return std::make_unique<Constant<kernelT,evalT>>(0.0);
+	      return norm();
+	    }
 	}
       default:
 	std::cout << "Acceptance method not implemented." << std::endl;
@@ -333,7 +371,53 @@ namespace morefit {
       return std::make_unique<LogNode<kernelT, evalT>>(std::move(prob()));
     }
     //integral over prob, range [from...to]
-    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const = 0;
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const
+    {
+      if (this->provides_analytic_norm())
+	{
+	  std::cout << "Please provide the analytic integral over your PDF or use the numeric integration" << std::endl;
+	  std::cout << "by implementing \"virtual bool provides_analytic_norm() const {return false;};\"" << std::endl;
+	  assert(0);
+	}
+      //numeric integration, will be overwritten in derived pdfs that implement it
+      /*
+      std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
+      std::vector<std::string> names;
+      for (int i=0; i<this->dimensions_.size(); i++)
+	{
+	  names.push_back(this->dimensions_.at(i)->get_from_name());
+	  replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_from_name()+"_loop"));
+	  names.push_back(this->dimensions_.at(i)->get_to_name());
+	  replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_to_name()+"_loop"));
+	}
+      */
+      //std::unique_ptr<ComputeGraphNode<kernelT, evalT>> integral(definite_integral()->substitute(names, replacements));
+      switch (montecarlo_type_) {
+      case montecarlo_type::flat:
+	{
+	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > replacements;
+	  std::vector<std::string> names;
+	  for (int i=0; i<this->dimensions_.size(); i++)
+	    {
+	      names.push_back(this->dimensions_.at(i)->get_name());
+	      replacements.emplace_back(std::make_unique<VariableNode<kernelT, evalT>>(this->dimensions_.at(i)->get_name()+"_loop"));
+	    }
+	  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> peff(this->prob_eff()->substitute(names, replacements));
+
+	  //std::unique_ptr<ComputeGraphNode<kernelT, evalT>> peff(this->prob_eff());
+	  evalT volume = 1.0;
+	  for (int i=0; i<this->dimensions_.size(); i++)
+	    volume *= (this->dimensions_.at(i)->get_max() - this->dimensions_.at(i)->get_min());
+	  return std::make_unique<LoopAndSumNode<kernelT,evalT>>(montecarlo_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
+								 Constant<kernelT,evalT>(volume/evalT(montecarlo_vector_->nevents()))*std::move(peff));
+	}
+      default:
+	{
+	  std::cout << "Monte Carlo type not implemented." << std::endl;
+	  assert(0);
+	}
+      }
+    }
     //definite integral over prob range [from ... to], the dimension names are replaced by dimension->get_from_name(), dimension->get_to_name(), this is used for eg. plotting
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const
     {
@@ -381,10 +465,10 @@ namespace morefit {
     {
       return false;
     }
-    virtual bool has_acceptance() const
-    {
-      return has_acceptance_;
-    }
+    // virtual bool has_acceptance() const
+    // {
+    //   return has_acceptance_;
+    // }
   };
 
   //one-dimensional Gaussian PDF
@@ -439,6 +523,10 @@ namespace morefit {
     {
       evalT n = 0.5*(erf((to()-mu()->get_value())/(sqrt(2.0)*sigma()->get_value()))-erf((from()-mu()->get_value())/(sqrt(2.0)*sigma()->get_value())));
       return 1.0/sqrt(2.0*M_PI)/sigma()->get_value()/n;
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
     }
   };
 
@@ -589,6 +677,10 @@ namespace morefit {
 
       return 1.0/integral;
     }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+    }
   };
   
   
@@ -647,6 +739,10 @@ namespace morefit {
 	return alpha()->get_value()*exp(alpha()->get_value()*to())/n;
       else
 	return alpha()->get_value()*exp(alpha()->get_value()*from())/n;
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
     }
   };
   
@@ -784,6 +880,10 @@ namespace morefit {
     {
       return extended_;
     }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+    }
   };
 
 
@@ -837,6 +937,10 @@ namespace morefit {
       for (unsigned int i=0; i<this->children_.size()-1; i++)
 	result *= this->children_.at(i)->get_max();
       return result;
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
     }
   };
 
@@ -1002,7 +1106,10 @@ namespace morefit {
     {
       return this->parameters_;
     }
-
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+    }
   };
 
   
