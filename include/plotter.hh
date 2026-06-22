@@ -357,7 +357,7 @@ namespace morefit {
       for (unsigned int i=0; i<nbins; i++)
 	{
 	  residuals_dy.at(i) = dy.at(i);
-	  double pull = residuals_y.at(i)/dy.at(i);
+	  double pull = (dy.at(i)!=0.0 ? residuals_y.at(i)/dy.at(i) : 0.0);
 	  pulls.at(i) = pull;	  
 	}
 

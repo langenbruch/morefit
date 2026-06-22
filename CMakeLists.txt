@@ -15,6 +15,14 @@ else()
 	message(STATUS "Building without ROOT libraries")
 endif()
 
+option(WITH_ONNX "Use the ONNX runtime" ON)
+if(WITH_ONNX)
+	add_compile_definitions(WITH_ONNX)
+	message(STATUS "Building with ONNX runtime")
+else()
+	message(STATUS "Building without ONNX runtime")
+endif()
+
 #finding LLVM
 find_package(Clang REQUIRED CONFIG HINTS "${CLANG_INSTALL_PREFIX}/lib/cmake/clang")
 message(STATUS "Using LLVMConfig.cmake: ${LLVM_CONFIG}")
@@ -59,22 +67,32 @@ endif()
 add_executable(morefit_massfit benchmarking/morefit_massfit.cc)
 add_executable(morefit_kstarmumu benchmarking/morefit_kstarmumu.cc)
 
-#link in these libraries
-#only link root if necessary
+set(LINK_LIBRARIES OpenCL Minuit2 pthread clang-cpp LLVM-17 mvec m Eigen3::Eigen)
 if(WITH_ROOT)
-target_link_libraries(morefit_massfit OpenCL Minuit2 ${ROOT_LIBRARIES} pthread clang-cpp LLVM-17 mvec m Eigen3::Eigen)
-target_link_libraries(morefit_kstarmumu OpenCL Minuit2 ${ROOT_LIBRARIES} pthread clang-cpp LLVM-17 mvec m Eigen3::Eigen)
-else()
-target_link_libraries(morefit_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen)
-target_link_libraries(morefit_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen)
+set(LINK_LIBRARIES ${LINK_LIBRARIES} ${ROOT_LIBRARIES})
 endif()
+if(WITH_ONNX)
+set(LINK_LIBRARIES ${LINK_LIBRARIES} onnxruntime)
+endif()
+
+target_link_libraries(morefit_massfit ${LINK_LIBRARIES})
+target_link_libraries(morefit_kstarmumu ${LINK_LIBRARIES})
+
+##link in these libraries
+##only link root if necessary
+#if(WITH_ROOT)
+#target_link_libraries(morefit_massfit OpenCL Minuit2 ${ROOT_LIBRARIES} pthread clang-cpp LLVM-17 mvec m Eigen3::Eigen)
+#target_link_libraries(morefit_kstarmumu OpenCL Minuit2 ${ROOT_LIBRARIES} pthread clang-cpp LLVM-17 mvec m Eigen3::Eigen)
+#else()
+#target_link_libraries(morefit_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen)
+#target_link_libraries(morefit_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen)
+#endif()
 
 #roofit exectuables for benchmarking
 #only build if root is available
 if(WITH_ROOT)
 add_executable(roofit_massfit benchmarking/roofit_massfit.cc)
 add_executable(roofit_kstarmumu benchmarking/roofit_kstarmumu.cc)
-
 target_link_libraries(roofit_massfit ${ROOT_LIBRARIES})
 target_link_libraries(roofit_kstarmumu ${ROOT_LIBRARIES})
 endif()
@@ -83,15 +101,34 @@ endif()
 #only build if root is available
 if(WITH_ROOT)
 add_executable(comparison_massfit tests/comparison_massfit.cc)
-target_link_libraries(comparison_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+target_link_libraries(comparison_massfit ${LINK_LIBRARIES})
 add_executable(comparison_kstarmumu tests/comparison_kstarmumu.cc)
-target_link_libraries(comparison_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+target_link_libraries(comparison_kstarmumu ${LINK_LIBRARIES})
 endif()
 
 #build test executables
-if(WITH_ROOT)
+if(WITH_ROOT AND WITH_ONNX)
 add_executable(tests_massfit tests/tests_massfit.cc)
-target_link_libraries(tests_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+target_link_libraries(tests_massfit ${LINK_LIBRARIES})
 add_executable(tests_kstarmumu tests/tests_kstarmumu.cc)
-target_link_libraries(tests_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+target_link_libraries(tests_kstarmumu ${LINK_LIBRARIES})
+add_executable(tests_quadratic tests/tests_quadratic.cc)
+target_link_libraries(tests_quadratic ${LINK_LIBRARIES})
 endif()
+
+##executable for comparison studies
+##only build if root is available
+#if(WITH_ROOT)
+#add_executable(comparison_massfit tests/comparison_massfit.cc)
+#target_link_libraries(comparison_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+#add_executable(comparison_kstarmumu tests/comparison_kstarmumu.cc)
+#target_link_libraries(comparison_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES})
+#endif()
+
+##build test executables
+#if(WITH_ROOT AND WITH_ONNX)
+#add_executable(tests_massfit tests/tests_massfit.cc)
+#target_link_libraries(tests_massfit OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES} onnxruntime)
+#add_executable(tests_kstarmumu tests/tests_kstarmumu.cc)
+#target_link_libraries(tests_kstarmumu OpenCL pthread Minuit2 clang-cpp LLVM-17 mvec m Eigen3::Eigen ${ROOT_LIBRARIES} onnxruntime)
+#endif()

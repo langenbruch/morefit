@@ -19,6 +19,10 @@
 #include <math.h>
 #include <fstream>
 
+#ifdef WITH_ONNX
+#include <onnxruntime/onnxruntime_cxx_api.h>
+#endif
+
 //#include "parametervector.hh"
 #include "morefit.hh"
 #include "eventvector.hh"
@@ -3312,7 +3316,188 @@ namespace morefit {
     }
   };
 
-
+#ifdef WITH_ONNX
+  //onnx node, n inputs, one output, in the future extend to provide derivatives as well
+  //TODO should instead the children contain the variable list?
+  template<typename kernelT, typename evalT> 
+  class OnnxNode: public ComputeGraphNode<kernelT, evalT> {
+  public:
+    std::string name_;
+    std::string filename_;
+    std::vector<std::string> inputs_;
+    Ort::Env env_;
+    Ort::SessionOptions session_options_;
+    Ort::Session* session_;
+    std::vector<int64_t> input_shape_;
+    //
+    using AllocatedStringPtr = std::unique_ptr<char, Ort::detail::AllocatedFree>;
+    Ort::AllocatorWithDefaultOptions allocator_;
+    std::vector<AllocatedStringPtr> inputNodeNameAllocatedStrings_;
+    std::vector<AllocatedStringPtr> outputNodeNameAllocatedStrings_;
+    std::vector<const char*> input_names_;
+    std::vector<const char*> output_names_;    
+    OnnxNode(std::string name, std::string filename, std::vector<std::string> inputs)
+      : name_(name),
+	filename_(filename),
+	inputs_(inputs),
+	env_(ORT_LOGGING_LEVEL_WARNING, name_.c_str()),
+	session_options_()
+    {
+      //we use a pointer to keep eval() const
+      session_ = new Ort::Session(env_, filename.c_str(), session_options_);      
+      for (unsigned int i=0; i<session_->GetInputCount(); i++)
+	{
+	  auto input_name_allocated = session_->GetInputNameAllocated(i, allocator_);
+	  inputNodeNameAllocatedStrings_.push_back(std::move(input_name_allocated));
+	  input_names_.emplace_back(inputNodeNameAllocatedStrings_.back().get());
+	  //std::cout << "Input " << i << ": " << input_names_.back() << std::endl;
+	}
+      for (unsigned int i=0; i<session_->GetOutputCount(); i++)
+	{
+	  auto output_name_allocated = session_->GetOutputNameAllocated(i, allocator_);
+	  outputNodeNameAllocatedStrings_.push_back(std::move(output_name_allocated));
+	  output_names_.emplace_back(outputNodeNameAllocatedStrings_.back().get());
+	  //std::cout << "Output " << i << ": " << output_names_.back() << std::endl;
+	}
+      //std::cout << "InputCount " << session_->GetInputCount() << " OutputCount " << session_->GetOutputCount() << std::endl;
+      assert(session_->GetInputCount() == 1 && session_->GetOutputCount() == 1);
+      input_shape_.push_back(inputs.size());
+    }
+    virtual ~OnnxNode()
+    {
+      delete session_;
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> copy() const override
+    {
+      return std::make_unique<OnnxNode<kernelT, evalT>>(name_, filename_, inputs_);
+    }
+    /*
+    //renames single variable, does change this expression (ie. is non-const)
+    virtual void rename_variable(const std::string& variable, const std::string& new_name)
+    {
+      if (name_ == variable)
+	name_ = new_name;
+    }
+    */
+    virtual std::string get_kernel(std::string prefix, std::vector<std::string>& lines) const override
+    {
+      std::string result = name_;
+      if (prefix == "")
+	return result;
+      else
+	{
+	  lines.push_back(prefix + result);
+	  return result;
+	}
+    }    
+    virtual std::string get_kernel() const override
+    {
+      return name_;
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> diff(std::string variable) const override
+    {
+      std::cout << "Differentiation not yet implemented for OnnxNode." << std::endl;
+      assert(0);
+      if (variable == name_)
+	return std::make_unique<ConstantNode<kernelT, evalT>>(1);
+      else
+	return std::make_unique<ConstantNode<kernelT, evalT>>(0);
+    }    
+    //substitute named variables (can be dimensions/parameters) with constants
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<double>& values) const override
+    {
+      //TODO
+      //std::cout << "Substitution not yet implemented for OnnxNode." << std::endl;
+      //assert(0);
+      return this->copy();
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> substitute(const std::vector<std::string>& variables, const std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>> & values) const override
+    {
+      //TODO
+      //std::cout << "Substitution not yet implemented for OnnxNode." << std::endl;
+      //assert(0);
+      return this->copy();
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> simplify() const override
+    {
+      //return std::make_unique<VariableNode<kernelT, evalT>>(name_);
+      return this->copy();
+    }
+    virtual void print(unsigned int level) const override
+    {
+      std::cout << std::string(level,'\t') << "OnnxNode: " << name_ << std::endl;
+    }
+    virtual bool variable_in_tree(const std::string& variable) const override
+    {
+      if (std::find(inputs_.begin(), inputs_.end(), variable) == inputs_.end())
+	return false;
+      else
+	return true;
+    }
+    virtual bool contains_other_variables(const std::vector<std::string>& variables) const override
+    {
+      for (unsigned int i=0; i<inputs_.size(); i++)
+	if (std::find(variables.begin(), variables.end(), inputs_.at(i)) == variables.end())
+	  return true;
+      return false;
+    }
+    virtual double cost() const override
+    {
+      return 1000.0;
+    }
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> optimize_buffering_constant_terms(std::vector<std::string>& buffernames, std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>>>& bufferexpressions, const std::vector<std::string>& variables, const std::string& prefix="morefit_buffer_", float buffering_cost_threshold = 2.0) override
+    {
+      return this->copy();
+    }
+    virtual evalT eval(const std::vector<std::string>& variables, const std::vector<double> & values) const override
+    {
+      std::vector<double> input_values(inputs_.size(), 0.0);
+      //fill input vector
+      for (unsigned int i=0; i<inputs_.size(); i++)
+	{
+	  auto it = std::find(variables.begin(), variables.end(), inputs_.at(i));
+	  if (it == variables.end())
+	    {
+	      std::cout << "Could not find all required ONNX inputs" << std::endl; 
+	      assert(0);
+	    }
+	  else
+	    {
+	      int idx = (it-variables.begin());
+	      input_values.at(i) = values.at(idx);
+	    }
+	}
+      Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+      Ort::Value input_tensor = Ort::Value::CreateTensor<double>(memory_info, input_values.data(), input_values.size(), input_shape_.data(), input_shape_.size());
+      std::vector<Ort::Value> input_tensors;
+      input_tensors.emplace_back(std::move(input_tensor));
+      std::vector<Ort::Value> output_tensors = session_->Run(Ort::RunOptions{nullptr}, input_names_.data(), input_tensors.data(), 1, output_names_.data(), 1);
+      const double* result = output_tensors[0].GetTensorMutableData<double>();
+      if (false)
+	{
+	  std::cout << "ONNX ";
+	  for (unsigned int i=0; i<input_values.size(); i++)
+	    std::cout << input_values.at(i) << " ";
+	  std::cout << "output " << result[0] << std::endl;
+	}
+      return result[0];
+    }
+    virtual std::string draw_node() const override
+    {
+      return name_;
+    }
+    //check equality of graphs
+    virtual bool operator==(const std::unique_ptr<ComputeGraphNode<kernelT, evalT>>& rhs) const override
+    {
+      OnnxNode<kernelT, evalT>* rhs_ = dynamic_cast<OnnxNode<kernelT, evalT>*>(rhs.get());
+      if (rhs_ != nullptr)
+	return (this->name_ == rhs_->name_ && this->filename_ == rhs_->filename_ && this->inputs_ == rhs_->inputs_);
+      else
+	return false;
+    }
+  };
+#endif
+  
   template<typename kernelT, typename evalT>
   std::unique_ptr<ComputeGraphNode<kernelT, evalT>> Variable(std::string name)
   {
