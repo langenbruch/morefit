@@ -44,16 +44,34 @@ int main()
   morefit::dimension<evalT> ctl("ctl", "cos(\\Theta_{l})", -1.0, 1.0, false);
   morefit::dimension<evalT> ctk("ctk", "cos(\\Theta_{K})", -1.0, 1.0, false);
   morefit::dimension<evalT> phi("phi", "\\phi", -M_PI, +M_PI, false);
-  morefit::parameter<evalT> Fl("Fl", "F_{\\mathrm{L}}", 0.6, 0.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S3("S3", "S_{3}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S4("S4", "S_{4}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S5("S5", "S_{5}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> Afb("Afb", "A_{\\mathrm{FB}}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S7("S7", "S_{7}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S8("S8", "S_{8}", 0.0, -1.0, 1.0, 0.01, false);
-  morefit::parameter<evalT> S9("S9", "S_{9}", 0.0, -1.0, 1.0, 0.01, false);
 
-  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+  double genfl = 0.6;
+  double gens3 = 0.0;
+  double gens4 = 0.0;
+  double gens5 = 0.0;
+  double genafb = 0.0;
+  double gens7 = 0.0;
+  double gens8 = 0.0;
+  double gens9 = 0.0;
+
+  double startfl = 0.6;
+  double starts3 = 0.0;
+  double starts4 = 0.0;
+  double starts5 = 0.0;
+  double startafb = 0.0;
+  double starts7 = 0.0;
+  double starts8 = 0.0;
+  double starts9 = 0.0;
+
+
+  morefit::parameter<evalT> Fl("Fl", "F_{\\mathrm{L}}", genfl, 0.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S3("S3", "S_{3}", gens3, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S4("S4", "S_{4}", gens4, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S5("S5", "S_{5}", gens5, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> Afb("Afb", "A_{\\mathrm{FB}}", genafb, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S7("S7", "S_{7}", gens7, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S8("S8", "S_{8}", gens8, -1.0, 1.0, 0.01, false);
+  morefit::parameter<evalT> S9("S9", "S_{9}", gens9, -1.0, 1.0, 0.01, false);
   std::vector<morefit::parameter<evalT>*> params({&Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9});
   
   morefit::Xoshiro128pp rnd;
@@ -61,7 +79,8 @@ int main()
 
   //produce graphs
   if (false)
-    {
+    {      
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
       kstarmumu.logprob()->draw("graph.tex");
       kstarmumu.logprob()->simplify()->draw("simplegraph.tex");
 
@@ -79,6 +98,7 @@ int main()
   //kernel output
   if (false)
     {
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
       std::cout << "FULL KERNEL " << kstarmumu.prob_normalised()->get_kernel() << std::endl;
       std::cout << "SIMPLIFIED KERNEL " << kstarmumu.prob_normalised()->simplify()->get_kernel() << std::endl;
       
@@ -95,6 +115,7 @@ int main()
   //check plotting
   if (false)
     {
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
       unsigned int ngen = 100000;
       std::cout <<"generating" << std::endl;
       morefit::generator_options gen_opts;
@@ -136,7 +157,7 @@ int main()
   //generate and fit unoptimized  
   if (false)
     {
-
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
       unsigned int nrepeats = 10;
       const unsigned int npoints = 4;
       unsigned int nstats[npoints] = {1000, 10000, 100000, 1000000};
@@ -237,7 +258,7 @@ int main()
   //check plotting with efficiencies
   if (false)
     {
-      
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);      
       morefit::EventVector<kernelT, evalT> eff;
       /*
       unsigned int nctlbins = 100;      
@@ -338,9 +359,9 @@ int main()
     }
 
   //check different acceptance approaches
-  if (true)
+  if (false)
     {
-      
+      morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
       morefit::EventVector<kernelT, evalT> eff;
 #ifdef WITH_ROOT
       TFile* bdt_file = new TFile("test_kstarmumu.root", "READ");
@@ -558,15 +579,431 @@ int main()
       plot.plot(&kstarmumu, params, &result, "ctk", "plot_ctk.eps", "eps", 100);
       plot.plot(&kstarmumu, params, &result, "phi", "plot_phi.eps", "eps", 100);
       
-      /*
-      std::vector<std::string> param_names;
-      for (unsigned int i=0; i<params.size(); i++)
-	param_names.push_back(params.at(i)->get_name());
-      std::vector<double> param_values;
-      for (unsigned int i=0; i<params.size(); i++)
-	param_values.push_back(params.at(i)->get_value());
-      */
       return 0;
+    }
+
+    //check different models
+  if (true)
+    {
+#ifdef WITH_ONNX
+
+      unsigned int nmodels = 100;
+
+      //toy study
+      unsigned int nruns = 1;
+      std::vector<double> fl_values_analytic(nmodels*nruns, 0.0);      
+      std::vector<double> s3_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_analytic(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_analytic(nmodels*nruns, 0.0);
+
+      std::vector<double> fl_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_onnx(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_onnx(nmodels*nruns, 0.0);
+      
+      std::vector<double> fl_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_onnx_grad(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_onnx_grad(nmodels*nruns, 0.0);
+
+      std::vector<double> fl_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_bdt(nmodels*nruns, 0.0);
+
+      for (unsigned int m=0; m<nmodels; m++)
+	{
+	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_direct_"+std::to_string(m)+".onnx").c_str());
+	  
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx").c_str());
+	  
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::EventVector<kernelT, evalT> eff;
+#ifdef WITH_ROOT
+	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_kstarmumu_"+std::to_string(m)+".root").c_str(), "READ");
+	  TTree* tree = (TTree*)bdt_file->Get("xgboost_regression");
+	  unsigned int nnodes = tree->GetEntries();      
+	  kstarmumu_bdt.set_acceptance_bdt(eff, nnodes);
+	  double value, ctl_from, ctl_to, ctk_from, ctk_to, phi_from, phi_to;
+	  tree->SetBranchAddress("f0_from", &ctl_from);
+	  tree->SetBranchAddress("f0_to", &ctl_to);
+	  tree->SetBranchAddress("f1_from", &ctk_from);
+	  tree->SetBranchAddress("f1_to", &ctk_to);
+	  tree->SetBranchAddress("f2_from", &phi_from);
+	  tree->SetBranchAddress("f2_to", &phi_to);
+	  tree->SetBranchAddress("value", &value);
+	  for (unsigned int i=0; i<tree->GetEntries(); i++)
+	    {
+	      tree->GetEntry(i);
+	      eff(i,0) = value;
+	      eff(i,1) = ctl_from;
+	      eff(i,2) = ctl_to;
+	      eff(i,3) = ctk_from;
+	      eff(i,4) = ctk_to;
+	      eff(i,5) = phi_from;
+	      eff(i,6) = phi_to;
+	    }
+	  eff.print();
+#endif      
+      
+	  unsigned int ngen = 100000;//00;
+	  std::cout <<"generating" << std::endl;
+	  morefit::generator_options gen_opts;
+      
+	  //morefit::generator<kernelT, evalT, backendT, blockT> gen(&gen_opts, &backend, &rnd);
+	  //morefit::EventVector<kernelT, evalT> result({&x}, ngen);  
+
+	  morefit::generator<kernelT, evalT, backendT, blockT> gen(&gen_opts, &backend, &rnd);
+	  morefit::EventVector<kernelT, evalT> result({&ctl, &ctk, &phi}, ngen);  
+	  //gen.generate(ngen, &kstarmumu, params, result);      
+
+	  //gen.generate(ngen, &kstarmumu_analytic, params, result);      
+	  //gen.generate(ngen, &kstarmumu, params, result);      
+      
+	  std::cout <<"fitting" << std::endl;      
+	  morefit::fitter_options opts;
+	  opts.minuit_printlevel = -1;
+	  opts.analytic_gradient = false;
+	  opts.analytic_hessian = false;
+	  opts.print_level = -1;
+	  opts.print();
+	  morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
+	  //fit.fit(&kstarmumu_analytic, params, &result);//TODO FIXME
+	  //fit.fit(&kstarmumu, params, &result);//TODO FIXME
+
+	  gen.generate(ngen, &kstarmumu_analytic, params, result);
+	  morefit::plotter_options plot_opts;
+	  //plot_opts.plotter = morefit::plotter_options::plotter_type::MatPlotLib;
+	  plot_opts.plotter = morefit::plotter_options::plotter_type::Root;
+	  plot_opts.print_level = 2;
+	  plot_opts.plot_pulls = true;
+	  //plot_opts.pull_fraction = 0.25;
+
+	  //morefit::plotter<kernelT,evalT, backendT, blockT> plot(&plot_opts, &backend);
+	  //plot.plot(&kstarmumu_analytic, params, &result, "x", "plot_x.eps", "eps", 100);
+	  //plot.plot(&kstarmumu_bdt, params, &result, "x", "plot_x.eps", "eps", 100);
+
+	  for (unsigned int i=0; i<nruns; i++)
+	    {
+	      std::cout << "model no " << m << " run no " << i << std::endl;
+
+	      //generate
+	      Fl.init("Fl", "F_{\\mathrm{L}}", genfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", gens3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", gens4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", gens5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", genafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", gens7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", gens8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", gens9, -1.0, 1.0, 0.01, false);
+	      gen.generate(ngen, &kstarmumu_analytic, params, result);
+	  
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      fit.fit(&kstarmumu_onnx, params, &result);//TODO FIXME
+	      
+	      fl_values_onnx.at(m*nruns+i) = Fl.get_value();
+	      s3_values_onnx.at(m*nruns+i) = S3.get_value();
+	      s4_values_onnx.at(m*nruns+i) = S4.get_value();
+	      s5_values_onnx.at(m*nruns+i) = S5.get_value();
+	      afb_values_onnx.at(m*nruns+i) = Afb.get_value();
+	      s7_values_onnx.at(m*nruns+i) = S7.get_value();
+	      s8_values_onnx.at(m*nruns+i) = S8.get_value();
+	      s9_values_onnx.at(m*nruns+i) = S9.get_value();
+	  
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      fit.fit(&kstarmumu_onnx_grad, params, &result);//TODO FIXME
+
+	      fl_values_onnx_grad.at(m*nruns+i) = Fl.get_value();
+	      s3_values_onnx_grad.at(m*nruns+i) = S3.get_value();
+	      s4_values_onnx_grad.at(m*nruns+i) = S4.get_value();
+	      s5_values_onnx_grad.at(m*nruns+i) = S5.get_value();
+	      afb_values_onnx_grad.at(m*nruns+i) = Afb.get_value();
+	      s7_values_onnx_grad.at(m*nruns+i) = S7.get_value();
+	      s8_values_onnx_grad.at(m*nruns+i) = S8.get_value();
+	      s9_values_onnx_grad.at(m*nruns+i) = S9.get_value();
+	  
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      fit.fit(&kstarmumu_analytic, params, &result);//TODO FIXME
+
+	      fl_values_analytic.at(m*nruns+i) = Fl.get_value();
+	      s3_values_analytic.at(m*nruns+i) = S3.get_value();
+	      s4_values_analytic.at(m*nruns+i) = S4.get_value();
+	      s5_values_analytic.at(m*nruns+i) = S5.get_value();
+	      afb_values_analytic.at(m*nruns+i) = Afb.get_value();
+	      s7_values_analytic.at(m*nruns+i) = S7.get_value();
+	      s8_values_analytic.at(m*nruns+i) = S8.get_value();
+	      s9_values_analytic.at(m*nruns+i) = S9.get_value();
+
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      fit.fit(&kstarmumu_bdt, params, &result);//TODO FIXME
+
+	      fl_values_bdt.at(m*nruns+i) = Fl.get_value();
+	      s3_values_bdt.at(m*nruns+i) = S3.get_value();
+	      s4_values_bdt.at(m*nruns+i) = S4.get_value();
+	      s5_values_bdt.at(m*nruns+i) = S5.get_value();
+	      afb_values_bdt.at(m*nruns+i) = Afb.get_value();
+	      s7_values_bdt.at(m*nruns+i) = S7.get_value();
+	      s8_values_bdt.at(m*nruns+i) = S8.get_value();
+	      s9_values_bdt.at(m*nruns+i) = S9.get_value();
+
+	    }
+	}
+#ifdef WITH_ROOT
+      gROOT->SetStyle("Plain");
+      gStyle->SetOptFit(0);
+      gStyle->SetOptStat(0);      
+
+      double dx = 0.5;
+      double dxdiff = 0.1;
+      unsigned int nbins = 50;
+
+      TH1D* hflanalytic = new TH1D("hflanalytic", ";F_{L};#entries", nbins, genfl-dx, genfl+dx);
+      TH1D* hs3analytic = new TH1D("hs3analytic", ";S_{3};#entries", nbins, gens3-dx, gens3+dx);
+      TH1D* hs4analytic = new TH1D("hs4analytic", ";S_{4};#entries", nbins, gens4-dx, gens4+dx);
+      TH1D* hs5analytic = new TH1D("hs5analytic", ";S_{5};#entries", nbins, gens5-dx, gens5+dx);
+      TH1D* hafbanalytic = new TH1D("hafbanalytic", ";A_{FB};#entries", nbins, genafb-dx, genafb+dx);
+      TH1D* hs7analytic = new TH1D("hs7analytic", ";S_{7};#entries", nbins, gens7-dx, gens7+dx);
+      TH1D* hs8analytic = new TH1D("hs8analytic", ";S_{8};#entries", nbins, gens8-dx, gens8+dx);
+      TH1D* hs9analytic = new TH1D("hs9analytic", ";S_{9};#entries", nbins, gens9-dx, gens9+dx);
+      
+      TH1D* hfldiff_onnx = new TH1D("hfldiff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_onnx = new TH1D("hs3diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_onnx = new TH1D("hs4diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_onnx = new TH1D("hs5diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_onnx = new TH1D("hafbdiff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_onnx = new TH1D("hs7diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_onnx = new TH1D("hs8diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_onnx = new TH1D("hs9diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+      TH1D* hfldiff_onnx_grad = new TH1D("hfldiff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_onnx_grad = new TH1D("hs3diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_onnx_grad = new TH1D("hs4diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_onnx_grad = new TH1D("hs5diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_onnx_grad = new TH1D("hafbdiff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_onnx_grad = new TH1D("hs7diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_onnx_grad = new TH1D("hs8diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_onnx_grad = new TH1D("hs9diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+      TH1D* hfldiff_bdt = new TH1D("hfldiff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_bdt = new TH1D("hs3diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_bdt = new TH1D("hs4diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_bdt = new TH1D("hs5diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_bdt = new TH1D("hafbdiff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_bdt = new TH1D("hs7diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_bdt = new TH1D("hs8diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_bdt = new TH1D("hs9diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+
+      for (unsigned int i=0; i<nruns*nmodels; i++)
+	{
+	  hflanalytic->Fill(fl_values_analytic.at(i));
+	  hs3analytic->Fill(s3_values_analytic.at(i));
+	  hs4analytic->Fill(s4_values_analytic.at(i));
+	  hs5analytic->Fill(s5_values_analytic.at(i));
+	  hafbanalytic->Fill(afb_values_analytic.at(i));
+	  hs7analytic->Fill(s7_values_analytic.at(i));
+	  hs8analytic->Fill(s8_values_analytic.at(i));
+	  hs9analytic->Fill(s9_values_analytic.at(i));
+
+	  hfldiff_onnx->Fill(fl_values_onnx.at(i)-fl_values_analytic.at(i));
+	  hs3diff_onnx->Fill(s3_values_onnx.at(i)-s3_values_analytic.at(i));
+	  hs4diff_onnx->Fill(s4_values_onnx.at(i)-s4_values_analytic.at(i));
+	  hs5diff_onnx->Fill(s5_values_onnx.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_onnx->Fill(afb_values_onnx.at(i)-afb_values_analytic.at(i));
+	  hs7diff_onnx->Fill(s7_values_onnx.at(i)-s7_values_analytic.at(i));
+	  hs8diff_onnx->Fill(s8_values_onnx.at(i)-s8_values_analytic.at(i));
+	  hs9diff_onnx->Fill(s9_values_onnx.at(i)-s9_values_analytic.at(i));
+	  
+	  hfldiff_onnx_grad->Fill(fl_values_onnx_grad.at(i)-fl_values_analytic.at(i));
+	  hs3diff_onnx_grad->Fill(s3_values_onnx_grad.at(i)-s3_values_analytic.at(i));
+	  hs4diff_onnx_grad->Fill(s4_values_onnx_grad.at(i)-s4_values_analytic.at(i));
+	  hs5diff_onnx_grad->Fill(s5_values_onnx_grad.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_onnx_grad->Fill(afb_values_onnx_grad.at(i)-afb_values_analytic.at(i));
+	  hs7diff_onnx_grad->Fill(s7_values_onnx_grad.at(i)-s7_values_analytic.at(i));
+	  hs8diff_onnx_grad->Fill(s8_values_onnx_grad.at(i)-s8_values_analytic.at(i));
+	  hs9diff_onnx_grad->Fill(s9_values_onnx_grad.at(i)-s9_values_analytic.at(i));	  
+
+	  hfldiff_bdt->Fill(fl_values_bdt.at(i)-fl_values_analytic.at(i));
+	  hs3diff_bdt->Fill(s3_values_bdt.at(i)-s3_values_analytic.at(i));
+	  hs4diff_bdt->Fill(s4_values_bdt.at(i)-s4_values_analytic.at(i));
+	  hs5diff_bdt->Fill(s5_values_bdt.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_bdt->Fill(afb_values_bdt.at(i)-afb_values_analytic.at(i));
+	  hs7diff_bdt->Fill(s7_values_bdt.at(i)-s7_values_analytic.at(i));
+	  hs8diff_bdt->Fill(s8_values_bdt.at(i)-s8_values_analytic.at(i));
+	  hs9diff_bdt->Fill(s9_values_bdt.at(i)-s9_values_analytic.at(i));
+	}
+
+      TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 800);
+      c0_->Divide(3,3);
+      c0_->cd(1)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hflanalytic->SetLineWidth(2.0);
+      hflanalytic->Draw("hist");
+      c0_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs3analytic->SetLineWidth(2.0);
+      hs3analytic->Draw("hist");
+      c0_->cd(3)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs4analytic->SetLineWidth(2.0);
+      hs4analytic->Draw("hist");
+      c0_->cd(4)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs5analytic->SetLineWidth(2.0);
+      hs5analytic->Draw("hist");
+      c0_->cd(5)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hafbanalytic->SetLineWidth(2.0);
+      hafbanalytic->Draw("hist");
+      c0_->cd(6)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs7analytic->SetLineWidth(2.0);
+      hs7analytic->Draw("hist");
+      c0_->cd(7)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs8analytic->SetLineWidth(2.0);
+      hs8analytic->Draw("hist");
+      c0_->cd(8)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs9analytic->SetLineWidth(2.0);
+      hs9analytic->Draw("hist");
+      
+      c0_->Print("diffs.eps", "eps");
+      
+      TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 800);
+      c1_->Divide(3,3);
+      c1_->cd(1)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hfldiff_onnx->SetLineWidth(2.0);
+      hfldiff_onnx->SetLineColor(2);
+      hfldiff_onnx_grad->SetLineWidth(2.0);
+      hfldiff_onnx_grad->SetLineColor(kOrange);
+      hfldiff_bdt->SetLineWidth(2.0);
+      hfldiff_bdt->SetLineColor(4);
+      hfldiff_onnx->Draw("hist");
+      hfldiff_onnx_grad->Draw("histsame");
+      hfldiff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs3diff_onnx->SetLineWidth(2.0);
+      hs3diff_onnx->SetLineColor(2);
+      hs3diff_onnx_grad->SetLineWidth(2.0);
+      hs3diff_onnx_grad->SetLineColor(kOrange);
+      hs3diff_bdt->SetLineWidth(2.0);
+      hs3diff_bdt->SetLineColor(4);
+      hs3diff_onnx->Draw("hist");
+      hs3diff_onnx_grad->Draw("histsame");
+      hs3diff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs4diff_onnx->SetLineWidth(2.0);
+      hs4diff_onnx->SetLineColor(2);
+      hs4diff_onnx_grad->SetLineWidth(2.0);
+      hs4diff_onnx_grad->SetLineColor(kOrange);
+      hs4diff_bdt->SetLineWidth(2.0);
+      hs4diff_bdt->SetLineColor(4);
+      hs4diff_onnx->Draw("hist");
+      hs4diff_onnx_grad->Draw("histsame");
+      hs4diff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs5diff_onnx->SetLineWidth(2.0);
+      hs5diff_onnx->SetLineColor(2);
+      hs5diff_onnx_grad->SetLineWidth(2.0);
+      hs5diff_onnx_grad->SetLineColor(kOrange);
+      hs5diff_bdt->SetLineWidth(2.0);
+      hs5diff_bdt->SetLineColor(4);
+      hs5diff_onnx->Draw("hist");
+      hs5diff_onnx_grad->Draw("histsame");
+      hs5diff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hafbdiff_onnx->SetLineWidth(2.0);
+      hafbdiff_onnx->SetLineColor(2);
+      hafbdiff_onnx_grad->SetLineWidth(2.0);
+      hafbdiff_onnx_grad->SetLineColor(kOrange);
+      hafbdiff_bdt->SetLineWidth(2.0);
+      hafbdiff_bdt->SetLineColor(4);
+      hafbdiff_onnx->Draw("hist");
+      hafbdiff_onnx_grad->Draw("histsame");
+      hafbdiff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs7diff_onnx->SetLineWidth(2.0);
+      hs7diff_onnx->SetLineColor(2);
+      hs7diff_onnx_grad->SetLineWidth(2.0);
+      hs7diff_onnx_grad->SetLineColor(kOrange);
+      hs7diff_bdt->SetLineWidth(2.0);
+      hs7diff_bdt->SetLineColor(4);
+      hs7diff_onnx->Draw("hist");
+      hs7diff_onnx_grad->Draw("histsame");
+      hs7diff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs8diff_onnx->SetLineWidth(2.0);
+      hs8diff_onnx->SetLineColor(2);
+      hs8diff_onnx_grad->SetLineWidth(2.0);
+      hs8diff_onnx_grad->SetLineColor(kOrange);
+      hs8diff_bdt->SetLineWidth(2.0);
+      hs8diff_bdt->SetLineColor(4);
+      hs8diff_onnx->Draw("hist");
+      hs8diff_onnx_grad->Draw("histsame");
+      hs8diff_bdt->Draw("histsame");
+      
+      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      hs9diff_onnx->SetLineWidth(2.0);
+      hs9diff_onnx->SetLineColor(2);
+      hs9diff_onnx_grad->SetLineWidth(2.0);
+      hs9diff_onnx_grad->SetLineColor(kOrange);
+      hs9diff_bdt->SetLineWidth(2.0);
+      hs9diff_bdt->SetLineColor(4);
+      hs9diff_onnx->Draw("hist");
+      hs9diff_onnx_grad->Draw("histsame");
+      hs9diff_bdt->Draw("histsame");
+      
+
+      c1_->Print("diffs2.eps", "eps");
+#endif
+
+      return 0;
+#endif
     }
 
   return 0;
