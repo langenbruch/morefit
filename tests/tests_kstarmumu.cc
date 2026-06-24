@@ -629,14 +629,16 @@ int main()
 
       for (unsigned int m=0; m<nmodels; m++)
 	{
+	  std::cout << "model " << m << std::endl;
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_direct_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
 	  
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::EventVector<kernelT, evalT> eff;
+	  std::cout << "after pdfs" << std::endl;
 #ifdef WITH_ROOT
 	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_kstarmumu_"+std::to_string(m)+".root").c_str(), "READ");
 	  TTree* tree = (TTree*)bdt_file->Get("xgboost_regression");
@@ -684,6 +686,12 @@ int main()
 	  opts.analytic_gradient = false;
 	  opts.analytic_hessian = false;
 	  opts.print_level = -1;
+	  opts.minuit_printlevel = 2;
+	  opts.print_level = 2;
+
+	  opts.optimize_dimensions = true;
+	  opts.optimize_parameters = true;
+
 	  opts.print();
 	  morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
 	  //fit.fit(&kstarmumu_analytic, params, &result);//TODO FIXME
@@ -714,6 +722,7 @@ int main()
 	      S7.init("S7", "S_{7}", gens7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", gens8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", gens9, -1.0, 1.0, 0.01, false);
+	      std::cout << "generating" << std::endl;
 	      gen.generate(ngen, &kstarmumu_analytic, params, result);
 	  
 	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
@@ -724,6 +733,7 @@ int main()
 	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting onnx" << std::endl;
 	      fit.fit(&kstarmumu_onnx, params, &result);//TODO FIXME
 	      
 	      fl_values_onnx.at(m*nruns+i) = Fl.get_value();
@@ -743,6 +753,7 @@ int main()
 	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting onnx grad" << std::endl;
 	      fit.fit(&kstarmumu_onnx_grad, params, &result);//TODO FIXME
 
 	      fl_values_onnx_grad.at(m*nruns+i) = Fl.get_value();
@@ -762,6 +773,7 @@ int main()
 	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting analytic" << std::endl;
 	      fit.fit(&kstarmumu_analytic, params, &result);//TODO FIXME
 
 	      fl_values_analytic.at(m*nruns+i) = Fl.get_value();
@@ -781,6 +793,7 @@ int main()
 	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting bdt" << std::endl;
 	      fit.fit(&kstarmumu_bdt, params, &result);//TODO FIXME
 
 	      fl_values_bdt.at(m*nruns+i) = Fl.get_value();
@@ -799,8 +812,8 @@ int main()
       gStyle->SetOptFit(0);
       gStyle->SetOptStat(0);      
 
-      double dx = 0.5;
-      double dxdiff = 0.1;
+      double dx = 0.1;
+      double dxdiff = 0.05;
       unsigned int nbins = 50;
 
       TH1D* hflanalytic = new TH1D("hflanalytic", ";F_{L};#entries", nbins, genfl-dx, genfl+dx);
@@ -917,9 +930,9 @@ int main()
       hfldiff_onnx_grad->SetLineColor(kOrange);
       hfldiff_bdt->SetLineWidth(2.0);
       hfldiff_bdt->SetLineColor(4);
-      hfldiff_onnx->Draw("hist");
+      hfldiff_bdt->Draw("hist");
+      hfldiff_onnx->Draw("histsame");
       hfldiff_onnx_grad->Draw("histsame");
-      hfldiff_bdt->Draw("histsame");
       
       c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs3diff_onnx->SetLineWidth(2.0);
@@ -928,75 +941,75 @@ int main()
       hs3diff_onnx_grad->SetLineColor(kOrange);
       hs3diff_bdt->SetLineWidth(2.0);
       hs3diff_bdt->SetLineColor(4);
-      hs3diff_onnx->Draw("hist");
+      hs3diff_bdt->Draw("hist");
+      hs3diff_onnx->Draw("histsame");
       hs3diff_onnx_grad->Draw("histsame");
-      hs3diff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(3)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs4diff_onnx->SetLineWidth(2.0);
       hs4diff_onnx->SetLineColor(2);
       hs4diff_onnx_grad->SetLineWidth(2.0);
       hs4diff_onnx_grad->SetLineColor(kOrange);
       hs4diff_bdt->SetLineWidth(2.0);
       hs4diff_bdt->SetLineColor(4);
-      hs4diff_onnx->Draw("hist");
+      hs4diff_bdt->Draw("hist");
+      hs4diff_onnx->Draw("histsame");
       hs4diff_onnx_grad->Draw("histsame");
-      hs4diff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(4)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs5diff_onnx->SetLineWidth(2.0);
       hs5diff_onnx->SetLineColor(2);
       hs5diff_onnx_grad->SetLineWidth(2.0);
       hs5diff_onnx_grad->SetLineColor(kOrange);
       hs5diff_bdt->SetLineWidth(2.0);
       hs5diff_bdt->SetLineColor(4);
-      hs5diff_onnx->Draw("hist");
+      hs5diff_bdt->Draw("hist");
+      hs5diff_onnx->Draw("histsame");
       hs5diff_onnx_grad->Draw("histsame");
-      hs5diff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(5)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hafbdiff_onnx->SetLineWidth(2.0);
       hafbdiff_onnx->SetLineColor(2);
       hafbdiff_onnx_grad->SetLineWidth(2.0);
       hafbdiff_onnx_grad->SetLineColor(kOrange);
       hafbdiff_bdt->SetLineWidth(2.0);
       hafbdiff_bdt->SetLineColor(4);
-      hafbdiff_onnx->Draw("hist");
+      hafbdiff_bdt->Draw("hist");
+      hafbdiff_onnx->Draw("histsame");
       hafbdiff_onnx_grad->Draw("histsame");
-      hafbdiff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(6)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs7diff_onnx->SetLineWidth(2.0);
       hs7diff_onnx->SetLineColor(2);
       hs7diff_onnx_grad->SetLineWidth(2.0);
       hs7diff_onnx_grad->SetLineColor(kOrange);
       hs7diff_bdt->SetLineWidth(2.0);
       hs7diff_bdt->SetLineColor(4);
-      hs7diff_onnx->Draw("hist");
+      hs7diff_bdt->Draw("hist");
+      hs7diff_onnx->Draw("histsame");
       hs7diff_onnx_grad->Draw("histsame");
-      hs7diff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(7)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs8diff_onnx->SetLineWidth(2.0);
       hs8diff_onnx->SetLineColor(2);
       hs8diff_onnx_grad->SetLineWidth(2.0);
       hs8diff_onnx_grad->SetLineColor(kOrange);
       hs8diff_bdt->SetLineWidth(2.0);
       hs8diff_bdt->SetLineColor(4);
-      hs8diff_onnx->Draw("hist");
+      hs8diff_bdt->Draw("hist");
+      hs8diff_onnx->Draw("histsame");
       hs8diff_onnx_grad->Draw("histsame");
-      hs8diff_bdt->Draw("histsame");
       
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(8)->SetMargin(0.15, 0.05, 0.15, 0.05);
       hs9diff_onnx->SetLineWidth(2.0);
       hs9diff_onnx->SetLineColor(2);
       hs9diff_onnx_grad->SetLineWidth(2.0);
       hs9diff_onnx_grad->SetLineColor(kOrange);
       hs9diff_bdt->SetLineWidth(2.0);
       hs9diff_bdt->SetLineColor(4);
-      hs9diff_onnx->Draw("hist");
+      hs9diff_bdt->Draw("hist");
+      hs9diff_onnx->Draw("histsame");
       hs9diff_onnx_grad->Draw("histsame");
-      hs9diff_bdt->Draw("histsame");
       
 
       c1_->Print("diffs2.eps", "eps");
