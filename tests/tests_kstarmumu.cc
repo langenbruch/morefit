@@ -587,7 +587,7 @@ int main()
     {
 #ifdef WITH_ONNX
 
-      unsigned int nmodels = 100;
+      unsigned int nmodels = 10;
 
       //toy study
       unsigned int nruns = 1;
@@ -633,8 +633,12 @@ int main()
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::EventVector<kernelT, evalT> eff;
@@ -930,6 +934,7 @@ int main()
       hfldiff_onnx_grad->SetLineColor(kOrange);
       hfldiff_bdt->SetLineWidth(2.0);
       hfldiff_bdt->SetLineColor(4);
+      hfldiff_bdt->SetMaximum(1.05*(hfldiff_bdt->GetMaximum() > hfldiff_onnx_grad->GetMaximum() ? hfldiff_bdt->GetMaximum() : hfldiff_onnx_grad->GetMaximum()));
       hfldiff_bdt->Draw("hist");
       hfldiff_onnx->Draw("histsame");
       hfldiff_onnx_grad->Draw("histsame");
@@ -941,6 +946,7 @@ int main()
       hs3diff_onnx_grad->SetLineColor(kOrange);
       hs3diff_bdt->SetLineWidth(2.0);
       hs3diff_bdt->SetLineColor(4);
+      hs3diff_bdt->SetMaximum(1.05*(hs3diff_bdt->GetMaximum() > hs3diff_onnx_grad->GetMaximum() ? hs3diff_bdt->GetMaximum() : hs3diff_onnx_grad->GetMaximum()));
       hs3diff_bdt->Draw("hist");
       hs3diff_onnx->Draw("histsame");
       hs3diff_onnx_grad->Draw("histsame");
@@ -952,6 +958,7 @@ int main()
       hs4diff_onnx_grad->SetLineColor(kOrange);
       hs4diff_bdt->SetLineWidth(2.0);
       hs4diff_bdt->SetLineColor(4);
+      hs4diff_bdt->SetMaximum(1.05*(hs4diff_bdt->GetMaximum() > hs4diff_onnx_grad->GetMaximum() ? hs4diff_bdt->GetMaximum() : hs4diff_onnx_grad->GetMaximum()));
       hs4diff_bdt->Draw("hist");
       hs4diff_onnx->Draw("histsame");
       hs4diff_onnx_grad->Draw("histsame");
@@ -963,6 +970,7 @@ int main()
       hs5diff_onnx_grad->SetLineColor(kOrange);
       hs5diff_bdt->SetLineWidth(2.0);
       hs5diff_bdt->SetLineColor(4);
+      hs5diff_bdt->SetMaximum(1.05*(hs5diff_bdt->GetMaximum() > hs5diff_onnx_grad->GetMaximum() ? hs5diff_bdt->GetMaximum() : hs5diff_onnx_grad->GetMaximum()));
       hs5diff_bdt->Draw("hist");
       hs5diff_onnx->Draw("histsame");
       hs5diff_onnx_grad->Draw("histsame");
@@ -974,6 +982,7 @@ int main()
       hafbdiff_onnx_grad->SetLineColor(kOrange);
       hafbdiff_bdt->SetLineWidth(2.0);
       hafbdiff_bdt->SetLineColor(4);
+      hafbdiff_bdt->SetMaximum(1.05*(hafbdiff_bdt->GetMaximum() > hafbdiff_onnx_grad->GetMaximum() ? hafbdiff_bdt->GetMaximum() : hafbdiff_onnx_grad->GetMaximum()));
       hafbdiff_bdt->Draw("hist");
       hafbdiff_onnx->Draw("histsame");
       hafbdiff_onnx_grad->Draw("histsame");
@@ -985,6 +994,7 @@ int main()
       hs7diff_onnx_grad->SetLineColor(kOrange);
       hs7diff_bdt->SetLineWidth(2.0);
       hs7diff_bdt->SetLineColor(4);
+      hs7diff_bdt->SetMaximum(1.05*(hs7diff_bdt->GetMaximum() > hs7diff_onnx_grad->GetMaximum() ? hs7diff_bdt->GetMaximum() : hs7diff_onnx_grad->GetMaximum()));
       hs7diff_bdt->Draw("hist");
       hs7diff_onnx->Draw("histsame");
       hs7diff_onnx_grad->Draw("histsame");
@@ -996,6 +1006,7 @@ int main()
       hs8diff_onnx_grad->SetLineColor(kOrange);
       hs8diff_bdt->SetLineWidth(2.0);
       hs8diff_bdt->SetLineColor(4);
+      hs8diff_bdt->SetMaximum(1.05*(hs8diff_bdt->GetMaximum() > hs8diff_onnx_grad->GetMaximum() ? hs8diff_bdt->GetMaximum() : hs8diff_onnx_grad->GetMaximum()));
       hs8diff_bdt->Draw("hist");
       hs8diff_onnx->Draw("histsame");
       hs8diff_onnx_grad->Draw("histsame");
@@ -1007,6 +1018,7 @@ int main()
       hs9diff_onnx_grad->SetLineColor(kOrange);
       hs9diff_bdt->SetLineWidth(2.0);
       hs9diff_bdt->SetLineColor(4);
+      hs9diff_bdt->SetMaximum(1.05*(hs9diff_bdt->GetMaximum() > hs9diff_onnx_grad->GetMaximum() ? hs9diff_bdt->GetMaximum() : hs9diff_onnx_grad->GetMaximum()));
       hs9diff_bdt->Draw("hist");
       hs9diff_onnx->Draw("histsame");
       hs9diff_onnx_grad->Draw("histsame");

@@ -165,6 +165,7 @@ namespace morefit {
     //returns efficiency depending on dimension variables
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> efficiency() const
     {
+      //return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);//FIXME REMOVE TEST
       switch (acceptance_type_) {
       case acceptance_type::none:
 	return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
