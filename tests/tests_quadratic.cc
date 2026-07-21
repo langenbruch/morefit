@@ -378,7 +378,7 @@ int main()
   if (true)
     {
 
-      unsigned int nmodels = 100;
+      unsigned int nmodels = 10;
 
       //toy study
       unsigned int nruns = 1;
@@ -393,7 +393,7 @@ int main()
 
       for (unsigned int m=0; m<nmodels; m++)
 	{
-	  
+	  /*
 	  morefit::QuadraticPDFAnalyticEps<kernelT, evalT> quadratic_analytic(&x, &c1, &c2);
 	  
 	  //morefit::QuadraticPDFOnnxEps<kernelT, evalT> quadratic_onnx(&x, &c1, &c2, "torch_model_direct_grad_0.onnx");
@@ -402,6 +402,17 @@ int main()
 	  morefit::QuadraticPDFOnnxEps<kernelT, evalT> quadratic_onnx_grad(&x, &c1, &c2, ("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::QuadraticPDF<kernelT, evalT> quadratic_bdt(&x, &c1, &c2);
+	  */
+	  
+	  morefit::QuadraticPDFNormalisedAnalyticEps<kernelT, evalT> quadratic_analytic(&x, &c1, &c2);
+	  
+	  //morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx(&x, &c1, &c2, "torch_model_direct_grad_0.onnx");
+	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx(&x, &c1, &c2, ("weights/torch_model_direct_"+std::to_string(m)+".onnx").c_str());
+	  
+	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_grad(&x, &c1, &c2, ("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx").c_str());
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_bdt(&x, &c1, &c2);
+	  
 	  morefit::EventVector<kernelT, evalT> eff;
 #ifdef WITH_ROOT
 	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_"+std::to_string(m)+".root").c_str(), "READ");

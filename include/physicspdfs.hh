@@ -870,6 +870,301 @@ def analytic_integral(fl, s3, s4, s5, afb, s7, s8, s9):
       //return false;
     }
   };
-  
+
+
+
+
+  template <typename kernelT=double, typename evalT=double> 
+  class QuadraticPDFNormalised: public PDF<kernelT, evalT> {
+  public:
+    QuadraticPDFNormalised(dimension<evalT>* x, parameter<evalT>* c1, parameter<evalT>* c2)
+    {           
+      this->dimensions_ = std::vector<dimension<evalT>*>({x});
+      this->parameters_ = std::vector<parameter<evalT>*>({c1, c2});
+    }      
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob() const override
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_ = Variable_(x()->get_name());
+      
+      //return Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name());
+      return (Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name()))/(Constant_(2.0) + Constant_(2.0/3.0)*Variable_(c2()->get_name()));
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const override
+    {
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;      
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      //return Constant_(2.0/3.0)*Variable_(c2()->get_name()) + Constant_(2.0);
+      return Constant_(1.0);
+    }    
+  virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override 
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_from = Variable_(x()->get_from_name());
+      Ptr x_to = Variable_(x()->get_to_name());
+
+      //return x_to->copy() - x_from->copy()
+      //	+ Constant_(1.0/2.0)*Variable_(c1()->get_name())*(x_to->copy()*x_to->copy() - x_from->copy()*x_from->copy())
+      //	+ Constant_(1.0/3.0)*Variable_(c2()->get_name())*(x_to->copy()*x_to->copy()*x_to->copy() - x_from->copy()*x_from->copy()*x_from->copy());
+
+      //((xto-xfrom)*(2*c2*xto^2 + 2*c2*xfrom*xto + 3*c1*xto + 2*c2*xfrom^2 + 3*c1*xfrom + 6))/(4*(c2+3))
+      return ((x_to->copy() - x_from->copy())*(Constant_(2.0)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()
+					       + Constant_(2.0)*Variable_(c2()->get_name())*x_from->copy()*x_to->copy()
+					       + Constant_(3.0)*Variable_(c1()->get_name())*x_to->copy()
+					       + Constant_(2.0)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()
+					       + Constant_(3.0)*Variable_(c1()->get_name())*x_from->copy()
+					       + Constant_(6.0)
+					       ))/(Constant_(4.0)*(Variable_(c2()->get_name()) + Constant_(3.0)));
+    }
+    dimension<evalT>* x() const
+    {
+      return this->dimensions_.at(0);
+    }
+    parameter<evalT>* c1() const
+    {
+      return this->parameters_.at(0);
+    }
+    parameter<evalT>* c2() const
+    {
+      return this->parameters_.at(1);
+    }
+    virtual evalT get_max() const override
+    {
+      return 1.0 + fabs(c1()->get_value()) + fabs(c2()->get_value());//assumes range -1...+1
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+      //return false;
+    }
+  };
+
+  template <typename kernelT=double, typename evalT=double> 
+  class QuadraticPDFNormalisedAnalyticEps: public PDF<kernelT, evalT> {
+  public:
+    QuadraticPDFNormalisedAnalyticEps(dimension<evalT>* x, parameter<evalT>* c1, parameter<evalT>* c2)
+    {           
+      this->dimensions_ = std::vector<dimension<evalT>*>({x});
+      this->parameters_ = std::vector<parameter<evalT>*>({c1, c2});
+    }      
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob() const override
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_ = Variable_(x()->get_name());
+      //constant term from 0.5+0.5sin(2pix) neglected?
+      Ptr eps_ = Constant_(0.5) + Constant_(0.5)*Sin<kernelT,evalT>(Constant_(2.0*M_PI)*x_->copy());
+      //return eps_->copy() * (Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name()));
+      return eps_->copy() * (Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name()))/(Constant_(2.0) + Constant_(2.0/3.0)*Variable_(c2()->get_name()));
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const override
+    {
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;      
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      //return Constant_(2.0/3.0)*Variable_(c2()->get_name()) + Constant_(2.0);
+      //return Constant_(1.0/3.0)*Variable_(c2()->get_name()) - Constant_(1.0/2.0/M_PI)*Variable_(c1()->get_name()) + Constant_(1.0);
+      //(2*%pi*c2-3*c1+6*%pi)/(4*%pi*(c2+3))
+      return (Constant_(2.0*M_PI)*Variable_(c2()->get_name()) - Constant_(3.0)*Variable_(c1()->get_name()) + Constant_(6.0*M_PI))/(Constant_(4.0*M_PI)*(Variable_(c2()->get_name()) + Constant_(3.0)));
+    }    
+  virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override 
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_from = Variable_(x()->get_from_name());
+      Ptr x_to = Variable_(x()->get_to_name());
+      /*      
+      (c2*xto*sin(2*%pi*xto))/(4*%pi^2)
+	+(c1*sin(2*%pi*xto))/(8*%pi^2)
+	-(c2*xto^2*cos(2*%pi*xto))/(4*%pi)
+	-(c1*xto*cos(2*%pi*xto))/(4*%pi)
+	+(c2*cos(2*%pi*xto))/(8*%pi^3)
+	-cos(2*%pi*xto)/(4*%pi)
+	+(c2*xto^3)/6
+	+(c1*xto^2)/4
+	+xto/2
+	-(c2*xfrom*sin(2*%pi*xfrom))/(4*%pi^2)
+	-(c1*sin(2*%pi*xfrom))/(8*%pi^2)
+	+(c2*xfrom^2*cos(2*%pi*xfrom))/(4*%pi)
+	+(c1*xfrom*cos(2*%pi*xfrom))/(4*%pi)
+	-(c2*cos(2*%pi*xfrom))/(8*%pi^3)
+	+cos(2*%pi*xfrom)/(4*%pi)
+	-(c2*xfrom^3)/6
+	-(c1*xfrom^2)/4
+	-xfrom/2;
+      */
+      /*
+      return
+	Constant_(1.0/4.0/M_PI/M_PI)*Variable_(c2()->get_name())*x_to->copy()*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	+Constant_(1.0/8.0/M_PI/M_PI)*Variable_(c1()->get_name())*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	-Constant_(1.0/4.0/M_PI)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	-Constant_(1.0/4.0/M_PI)*Variable_(c1()->get_name())*x_to->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	+Constant_(1.0/8.0/M_PI/M_PI/M_PI)*Variable_(c2()->get_name())*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	-Constant_(1.0/4.0/M_PI)*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	+Constant_(1.0/6.0)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()*x_to->copy()
+	+Constant_(1.0/4.0)*Variable_(c1()->get_name())*x_to->copy()*x_to->copy()
+	+Constant_(1.0/2.0)*x_to->copy()
+	
+	-Constant_(1.0/4.0/M_PI/M_PI)*Variable_(c2()->get_name())*x_from->copy()*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	-Constant_(1.0/8.0/M_PI/M_PI)*Variable_(c1()->get_name())*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	+Constant_(1.0/4.0/M_PI)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	+Constant_(1.0/4.0/M_PI)*Variable_(c1()->get_name())*x_from->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	-Constant_(1.0/8.0/M_PI/M_PI/M_PI)*Variable_(c2()->get_name())*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	+Constant_(1.0/4.0/M_PI)*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	-Constant_(1.0/6.0)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()*x_from->copy()
+	-Constant_(1.0/4.0)*Variable_(c1()->get_name())*x_from->copy()*x_from->copy()
+	-Constant_(1.0/2.0)*x_from->copy()
+	;
+      */
+      return (Constant_(6.0*M_PI)*Variable_(c2()->get_name())*x_to->copy()*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      +Constant_(3.0*M_PI)*Variable_(c1()->get_name())*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      -Constant_(6.0*M_PI*M_PI)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      -Constant_(6.0*M_PI*M_PI)*Variable_(c1()->get_name())*x_to->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      +Constant_(3.0)*Variable_(c2()->get_name())*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      -Constant_(6.0*M_PI*M_PI)*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_to->copy())
+	      +Constant_(4.0*M_PI*M_PI*M_PI)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()*x_to->copy()
+	      +Constant_(6.0*M_PI*M_PI*M_PI)*Variable_(c1()->get_name())*x_to->copy()*x_to->copy()
+	      +Constant_(12.0*M_PI*M_PI*M_PI)*x_to->copy()
+	      
+	      -Constant_(6.0*M_PI)*Variable_(c2()->get_name())*x_from->copy()*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      -Constant_(3.0*M_PI)*Variable_(c1()->get_name())*Sin<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      +Constant_(6.0*M_PI*M_PI)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      +Constant_(6.0*M_PI*M_PI)*Variable_(c1()->get_name())*x_from->copy()*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      -Constant_(3.0)*Variable_(c2()->get_name())*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      +Constant_(6.0*M_PI*M_PI)*Cos<kernelT, evalT>(Constant_(2.0*M_PI)*x_from->copy())
+	      -Constant_(4.0*M_PI*M_PI*M_PI)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()*x_from->copy()
+	      -Constant_(6.0*M_PI*M_PI*M_PI)*Variable_(c1()->get_name())*x_from->copy()*x_from->copy()
+	      -Constant_(12.0*M_PI*M_PI*M_PI)*x_from->copy()
+	      )/(Constant_(16.0*M_PI*M_PI*M_PI)*(Constant_(3.0)+Variable_(c2()->get_name())));
+	/*	
+      (6*%pi*c2*xto*sin(2*%pi*xto)
+       +3*%pi*c1*sin(2*%pi*xto)
+       -6*%pi^2*c2*xto^2*cos(2*%pi*xto)
+       -6*%pi^2*c1*xto*cos(2*%pi*xto)
+       +3*c2*cos(2*%pi*xto)
+       -6*%pi^2*cos(2*%pi*xto)
+       +4*%pi^3*c2*xto^3
+       +6*%pi^3*c1*xto^2
+       +12*%pi^3*xto
+
+       -6*%pi*c2*xfrom*sin(2*%pi*xfrom)
+       -3*%pi*c1*sin(2*%pi*xfrom)
+       +6*%pi^2*c2*xfrom^2*cos(2*%pi*xfrom)
+       +6*%pi^2*c1*xfrom*cos(2*%pi*xfrom)
+       -3*c2*cos(2*%pi*xfrom)
+       +6*%pi^2*cos(2*%pi*xfrom)
+       -4*%pi^3*c2*xfrom^3
+       -6*%pi^3*c1*xfrom^2
+       -12*%pi^3*xfrom)
+	/(16*%pi^3*(c2+3))
+	*/
+    }
+    dimension<evalT>* x() const
+    {
+      return this->dimensions_.at(0);
+    }
+    parameter<evalT>* c1() const
+    {
+      return this->parameters_.at(0);
+    }
+    parameter<evalT>* c2() const
+    {
+      return this->parameters_.at(1);
+    }
+    virtual evalT get_max() const override
+    {
+      return 1.0 + fabs(c1()->get_value()) + fabs(c2()->get_value());//always smaller...
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+      //return false;
+    }
+  };
+
+  template <typename kernelT=double, typename evalT=double> 
+  class QuadraticPDFNormalisedOnnxEps: public PDF<kernelT, evalT> {
+  public:
+    std::string filename_;
+    QuadraticPDFNormalisedOnnxEps(dimension<evalT>* x, parameter<evalT>* c1, parameter<evalT>* c2, std::string filename):
+      filename_(filename)
+    {           
+      this->dimensions_ = std::vector<dimension<evalT>*>({x});
+      this->parameters_ = std::vector<parameter<evalT>*>({c1, c2});
+    }      
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob() const override
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_ = Variable_(x()->get_name());
+      
+      //return Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name());
+      return (Constant_(1.0) + x_->copy()*Variable_(c1()->get_name()) + x_->copy()*x_->copy()*Variable_(c2()->get_name()))/(Constant_(2.0) + Constant_(2.0/3.0)*Variable_(c2()->get_name()));
+    }    
+    virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm() const override
+    {
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;      
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      //return Constant_(2.0/3.0)*Variable_(c2()->get_name()) + Constant_(2.0);
+      //return OnnxNode(std::string name, std::string filename, std::vector<std::string> inputs);
+      std::vector<std::string> inputs;
+      inputs.push_back(this->c1()->get_name());
+      inputs.push_back(this->c2()->get_name());
+      return std::make_unique<OnnxNode<kernelT, evalT>>("OnnxNorm"+IDCreator::Instance()->get_name(), filename_, inputs);
+    }    
+  virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override 
+    {
+      //to avoid typing template arguments
+      constexpr auto Constant_ = &Constant<kernelT, evalT>;
+      constexpr auto Variable_ = &Variable<kernelT, evalT>;
+      typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
+      Ptr x_from = Variable_(x()->get_from_name());
+      Ptr x_to = Variable_(x()->get_to_name());
+
+      //return x_to->copy() - x_from->copy()
+      //	+ Constant_(1.0/2.0)*Variable_(c1()->get_name())*(x_to->copy()*x_to->copy() - x_from->copy()*x_from->copy())
+      //	+ Constant_(1.0/3.0)*Variable_(c2()->get_name())*(x_to->copy()*x_to->copy()*x_to->copy() - x_from->copy()*x_from->copy()*x_from->copy());
+      return ((x_to->copy() - x_from->copy())*(Constant_(2.0)*Variable_(c2()->get_name())*x_to->copy()*x_to->copy()
+					       + Constant_(2.0)*Variable_(c2()->get_name())*x_from->copy()*x_to->copy()
+					       + Constant_(3.0)*Variable_(c1()->get_name())*x_to->copy()
+					       + Constant_(2.0)*Variable_(c2()->get_name())*x_from->copy()*x_from->copy()
+					       + Constant_(3.0)*Variable_(c1()->get_name())*x_from->copy()
+					       + Constant_(6.0)
+					       ))/(Constant_(4.0)*(Variable_(c2()->get_name()) + Constant_(3.0)));
+    }
+    dimension<evalT>* x() const
+    {
+      return this->dimensions_.at(0);
+    }
+    parameter<evalT>* c1() const
+    {
+      return this->parameters_.at(0);
+    }
+    parameter<evalT>* c2() const
+    {
+      return this->parameters_.at(1);
+    }
+    virtual evalT get_max() const override
+    {
+      return 1.0 + fabs(c1()->get_value()) + fabs(c2()->get_value());//assumes range -1...+1
+    }
+    virtual bool provides_analytic_norm() const
+    {
+      return true;
+      //return false;
+    }
+  };
+
 };
 #endif

@@ -587,7 +587,7 @@ int main()
     {
 #ifdef WITH_ONNX
 
-      unsigned int nmodels = 10;
+      unsigned int nmodels = 100;
 
       //toy study
       unsigned int nruns = 1;
@@ -632,13 +632,19 @@ int main()
 	  std::cout << "model " << m << std::endl;
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
 	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx").c_str());
 	  
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
 	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
+	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::EventVector<kernelT, evalT> eff;
