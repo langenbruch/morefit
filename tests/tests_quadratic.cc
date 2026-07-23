@@ -523,20 +523,20 @@ int main()
       TH1D* hc2onnxgrad = new TH1D("hc2onnxgrad", ";c_{2};#entries", nbins, -dx, +dx);
       TH1D* hc1bdt = new TH1D("hc1bdt", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2bdt = new TH1D("hc2bdt", ";c_{2};#entries", nbins, -dx, +dx);
-      TH1D* hc1diff = new TH1D("hc1diff", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
-      TH1D* hc2diff = new TH1D("hc2diff", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
-      TH1D* hc1diff2 = new TH1D("hc1diff2", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
-      TH1D* hc2diff2 = new TH1D("hc2diff2", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
-      TH1D* hc1diff3 = new TH1D("hc1diff3", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
-      TH1D* hc2diff3 = new TH1D("hc2diff3", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc1diff_onnx = new TH1D("hc1diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_onnx = new TH1D("hc2diff_onnx", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc1diff_onnx_grad = new TH1D("hc1diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_onnx_grad = new TH1D("hc2diff_onnx_grad", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc1diff_bdt = new TH1D("hc1diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_bdt = new TH1D("hc2diff_bdt", ";modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       for (unsigned int i=0; i<nruns*nmodels; i++)
 	{
-	  hc1diff->Fill(c1_values_onnx.at(i)-c1_values_analytic.at(i));
-	  hc2diff->Fill(c2_values_onnx.at(i)-c2_values_analytic.at(i));
-	  hc1diff2->Fill(c1_values_onnx_grad.at(i)-c1_values_analytic.at(i));
-	  hc2diff2->Fill(c2_values_onnx_grad.at(i)-c2_values_analytic.at(i));
-	  hc1diff3->Fill(c1_values_bdt.at(i)-c1_values_analytic.at(i));
-	  hc2diff3->Fill(c2_values_bdt.at(i)-c2_values_analytic.at(i));
+	  hc1diff_onnx->Fill(c1_values_onnx.at(i)-c1_values_analytic.at(i));
+	  hc2diff_onnx->Fill(c2_values_onnx.at(i)-c2_values_analytic.at(i));
+	  hc1diff_onnx_grad->Fill(c1_values_onnx_grad.at(i)-c1_values_analytic.at(i));
+	  hc2diff_onnx_grad->Fill(c2_values_onnx_grad.at(i)-c2_values_analytic.at(i));
+	  hc1diff_bdt->Fill(c1_values_bdt.at(i)-c1_values_analytic.at(i));
+	  hc2diff_bdt->Fill(c2_values_bdt.at(i)-c2_values_analytic.at(i));
 	  hc1analytic->Fill(c1_values_analytic.at(i));
 	  hc2analytic->Fill(c2_values_analytic.at(i));
 	  hc1onnx->Fill(c1_values_onnx.at(i));
@@ -562,18 +562,18 @@ int main()
       if (hc2onnxgrad->GetMaximum() > maxy)
 	maxy = hc2onnxgrad->GetMaximum();
       hc2analytic->SetMaximum(maxy*1.1);
-      maxy = hc1diff->GetMaximum();
-      if (hc1diff2->GetMaximum() > maxy)
-	maxy = hc1diff2->GetMaximum();
-      if (hc1diff3->GetMaximum() > maxy)
-	maxy = hc1diff3->GetMaximum();
-      hc1diff->SetMaximum(maxy*1.1);
-      maxy = hc2diff->GetMaximum();
-      if (hc2diff2->GetMaximum() > maxy)
-	maxy = hc2diff2->GetMaximum();
-      if (hc2diff3->GetMaximum() > maxy)
-	maxy = hc2diff3->GetMaximum();
-      hc2diff->SetMaximum(maxy*1.1);
+      maxy = hc1diff_onnx->GetMaximum();
+      if (hc1diff_onnx_grad->GetMaximum() > maxy)
+	maxy = hc1diff_onnx_grad->GetMaximum();
+      if (hc1diff_bdt->GetMaximum() > maxy)
+	maxy = hc1diff_bdt->GetMaximum();
+      hc1diff_onnx->SetMaximum(maxy*1.1);
+      maxy = hc2diff_onnx->GetMaximum();
+      if (hc2diff_onnx_grad->GetMaximum() > maxy)
+	maxy = hc2diff_onnx_grad->GetMaximum();
+      if (hc2diff_bdt->GetMaximum() > maxy)
+	maxy = hc2diff_bdt->GetMaximum();
+      hc2diff_onnx->SetMaximum(maxy*1.1);
       
       TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 800);
       c0_->Divide(2,1);
@@ -621,26 +621,26 @@ int main()
       TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 800);
       c1_->Divide(2,1);
       c1_->cd(1)->SetMargin(0.15, 0.05, 0.15, 0.05);
-      hc1diff->SetLineWidth(2.0);
-      hc1diff->SetLineColor(2);
-      hc1diff2->SetLineWidth(2.0);
-      hc1diff2->SetLineColor(kOrange);
-      hc1diff3->SetLineWidth(2.0);
-      hc1diff3->SetLineColor(4);
-      hc1diff->Draw("hist");
-      hc1diff2->Draw("histsame");
-      hc1diff3->Draw("histsame");
+      hc1diff_onnx->SetLineWidth(2.0);
+      hc1diff_onnx->SetLineColor(2);
+      hc1diff_onnx_grad->SetLineWidth(2.0);
+      hc1diff_onnx_grad->SetLineColor(kOrange);
+      hc1diff_bdt->SetLineWidth(2.0);
+      hc1diff_bdt->SetLineColor(4);
+      hc1diff_onnx->Draw("hist");
+      hc1diff_onnx_grad->Draw("histsame");
+      hc1diff_bdt->Draw("histsame");
       leg->Draw();
       c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
-      hc2diff->SetLineWidth(2.0);      
-      hc2diff->SetLineColor(2);
-      hc2diff2->SetLineWidth(2.0);      
-      hc2diff2->SetLineColor(kOrange);
-      hc2diff3->SetLineWidth(2.0);      
-      hc2diff3->SetLineColor(4);
-      hc2diff->Draw("hist");
-      hc2diff2->Draw("histsame");
-      hc2diff3->Draw("histsame");
+      hc2diff_onnx->SetLineWidth(2.0);
+      hc2diff_onnx->SetLineColor(2);
+      hc2diff_onnx_grad->SetLineWidth(2.0);
+      hc2diff_onnx_grad->SetLineColor(kOrange);
+      hc2diff_bdt->SetLineWidth(2.0);
+      hc2diff_bdt->SetLineColor(4);
+      hc2diff_onnx->Draw("hist");
+      hc2diff_onnx_grad->Draw("histsame");
+      hc2diff_bdt->Draw("histsame");
       leg->Draw();
       c1_->Print("diffs2.eps", "eps");
 #endif
