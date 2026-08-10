@@ -38,7 +38,7 @@ void get_meanrms(std::vector<double> a, std::vector<double> b, double & mean, do
   return;
 }
 
-void print_table(std::vector<std::vector<double>> nominals, std::vector<std::vector<std::vector<double>>> values, std::vector<std::string> observables, std::vector<std::string> methods)
+void print_table_meanrms(std::vector<std::vector<double>> nominals, std::vector<std::vector<std::vector<double>>> values, std::vector<std::string> observables, std::vector<std::string> methods)
 {
   assert(methods.size() == values.size());
   assert(observables.size() == nominals.size());
@@ -71,6 +71,64 @@ void print_table(std::vector<std::vector<double>> nominals, std::vector<std::vec
     }
   std::cout << "\\hline\\end{tabular}" << std::endl;
   std::cout << "\\caption{Mean $[10^{-3}]$ and RMS $[10^{-3}]$ of the distribution of the fitted angular observables of the specific methods to calculate the normalisation integral, subtracted by the analytic normalisation.}" << std::endl;
+}
+
+void print_table_mean(std::vector<std::vector<double>> nominals, std::vector<std::vector<std::vector<double>>> values, std::vector<std::string> observables, std::vector<std::string> methods)
+{
+  assert(methods.size() == values.size());
+  assert(observables.size() == nominals.size());
+  std::cout << "\\begin{tabular}{l";
+  for (unsigned int i=0; i<observables.size(); i++)
+    std::cout << "r";
+  std::cout << "}\\hline" << std::endl;
+  std::cout << " &";
+  for (unsigned int i=0; i<observables.size(); i++)
+    std::cout << observables.at(i) << (i<observables.size()-1 ? " & " : " ");
+  std::cout << "\\\\ \\hline\\hline" << std::endl;
+  for (unsigned int i=0; i<methods.size(); i++)//i method idx
+    {
+      std::cout << methods.at(i) << " & ";
+      for (unsigned int j=0; j<values.at(i).size(); j++)//j observable index
+	{
+	  std::string name = observables.at(j);
+	  double mean, rms;
+	  std::vector<double> v = values.at(i).at(j);
+	  get_meanrms(v, nominals.at(j), mean, rms);
+	  std::cout << std::fixed << std::setprecision(1) << mean/1.0e-3 << (j<values.at(i).size() - 1 ? " & " : " ");
+	}
+      std::cout << "\\\\" << std::endl;
+    }
+  std::cout << "\\hline\\end{tabular}" << std::endl;
+  std::cout << "\\caption{Mean $[10^{-3}]$ of the distribution of the fitted angular observables of the specific methods to calculate the normalisation integral, subtracted by the analytic normalisation.}" << std::endl;
+}
+
+void print_table_rms(std::vector<std::vector<double>> nominals, std::vector<std::vector<std::vector<double>>> values, std::vector<std::string> observables, std::vector<std::string> methods)
+{
+  assert(methods.size() == values.size());
+  assert(observables.size() == nominals.size());
+  std::cout << "\\begin{tabular}{l";
+  for (unsigned int i=0; i<observables.size(); i++)
+    std::cout << "r";
+  std::cout << "}\\hline" << std::endl;
+  std::cout <<" &";
+  for (unsigned int i=0; i<observables.size(); i++)
+    std::cout << observables.at(i) << (i<observables.size()-1 ? " & " : " ");
+  std::cout << "\\\\ \\hline\\hline" << std::endl;
+  for (unsigned int i=0; i<methods.size(); i++)//i method idx
+    {
+      std::cout << methods.at(i) << " & ";
+      for (unsigned int j=0; j<values.at(i).size(); j++)//j observable index
+	{
+	  std::string name = observables.at(j);
+	  double mean, rms;
+	  std::vector<double> v = values.at(i).at(j);
+	  get_meanrms(v, nominals.at(j), mean, rms);
+	  std::cout << std::fixed << std::setprecision(1) << rms/1.0e-3 << (j<values.at(i).size() - 1 ? " & " : " ");
+	}
+      std::cout << "\\\\" << std::endl;
+    }
+  std::cout << "\\hline\\end{tabular}" << std::endl;
+  std::cout << "\\caption{RMS $[10^{-3}]$ of the distribution of the fitted angular observables of the specific methods to calculate the normalisation integral, subtracted by the analytic normalisation.}" << std::endl;
 }
 
 int main()
@@ -1189,16 +1247,22 @@ int main()
 	values_onnx_mse, values_onnx_mse_grad,
 	values_onnx_msemodified, values_onnx_msemodified_grad
       };
-
-      //void print_table(std::vector<std::vector<double>> nominals, std::vector<std::vector<std::vector<double>>> values, std::vector<std::string> obervables, std::vector<std::string> methods)
-
-      print_table(analytic_values, values, observables, methods);
+      print_table_mean(analytic_values, values, observables, methods);
+      print_table_rms(analytic_values, values, observables, methods);
+      print_table_meanrms(analytic_values, values, observables, methods);
       
 #ifdef WITH_ROOT
       gROOT->SetStyle("Plain");
       gStyle->SetOptFit(0);
-      gStyle->SetOptStat(0);      
-
+      gStyle->SetOptStat(0);
+      gStyle->SetTextFont(132);
+      gStyle->SetTextSize(0.06);
+      gStyle->SetTitleFont(132,"xyz");
+      gStyle->SetLabelFont(132,"xyz");
+      gStyle->SetLabelSize(0.05,"xyz");
+      gStyle->SetTitleSize(0.06,"xyz");
+      gStyle->SetLegendFont(132);
+      
       double dx = 0.1;
       double dxdiff = 0.05;
       unsigned int nbins = 100;
@@ -1462,28 +1526,28 @@ int main()
 
       TCanvas* c0_ = new TCanvas("c0", "c0", 3*1200, 3*800);
       c0_->Divide(3,3);
-      c0_->cd(1)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hflanalytic->SetLineWidth(1.0);
       hflanalytic->Draw("hist");
-      c0_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs3analytic->SetLineWidth(1.0);
       hs3analytic->Draw("hist");
-      c0_->cd(3)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(3)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs4analytic->SetLineWidth(1.0);
       hs4analytic->Draw("hist");
-      c0_->cd(4)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(4)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs5analytic->SetLineWidth(1.0);
       hs5analytic->Draw("hist");
-      c0_->cd(5)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(5)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hafbanalytic->SetLineWidth(1.0);
       hafbanalytic->Draw("hist");
-      c0_->cd(6)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(6)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs7analytic->SetLineWidth(1.0);
       hs7analytic->Draw("hist");
-      c0_->cd(7)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(7)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs8analytic->SetLineWidth(1.0);
       hs8analytic->Draw("hist");
-      c0_->cd(8)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c0_->cd(8)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs9analytic->SetLineWidth(1.0);
       hs9analytic->Draw("hist");
       
@@ -1492,8 +1556,24 @@ int main()
       
       TCanvas* c1_ = new TCanvas("c1", "c1", 3*1600, 3*800);
       c1_->Divide(3,3);
-      c1_->cd(1)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
 
+      TLegend* leg = new TLegend(0.6, 0.5, 0.95, 0.95);
+      //leg->AddEntry(hc1analytic,"analytic truth","l");
+      leg->AddEntry(hfldiff_bdt,"BDT modeling #epsilon","l");
+      leg->AddEntry(hfldiff_onnx_groundtruth,"ONNX groundtruth","l");
+      leg->AddEntry(hfldiff_onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
+      leg->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX efficiencytruth","l");
+      leg->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
+      leg->AddEntry(hfldiff_onnx_direct,"ONNX direct","l");
+      leg->AddEntry(hfldiff_onnx_direct_grad,"ONNX direct grad.","l");
+      leg->AddEntry(hfldiff_onnx_mse,"ONNX mse","l");
+      leg->AddEntry(hfldiff_onnx_mse_grad,"ONNX mse grad.","l");
+      leg->AddEntry(hfldiff_onnx_msemodified,"ONNX msemodified","l");
+      leg->AddEntry(hfldiff_onnx_msemodified_grad,"ONNX msemodified grad.","l");
+      //leg->AddEntry(hfldiff_onnx_bdt,"ONNX bdt","l");
+      //leg->AddEntry(hfldiff_onnx_bdt_grad,"ONNX bdt grad.","l");
+      
       hfldiff_onnx_groundtruth->SetLineWidth(1.0);
       hfldiff_onnx_groundtruth->SetLineColor(2);
       hfldiff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1539,12 +1619,13 @@ int main()
       hfldiff_onnx_mse_grad->Draw("histsame");
       hfldiff_onnx_msemodified->Draw("histsame");
       hfldiff_onnx_msemodified_grad->Draw("histsame");
-      hfldiff_onnx_bdt->Draw("histsame");
-      hfldiff_onnx_bdt_grad->Draw("histsame");
+      //hfldiff_onnx_bdt->Draw("histsame");
+      //hfldiff_onnx_bdt_grad->Draw("histsame");
+      leg->Draw();
       c1_->cd(1)->Print("diffs_kstarmumu_fl.eps", "eps");
       c1_->cd(1)->Print("diffs_kstarmumu_fl.root", "root");
 
-      c1_->cd(2)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs3diff_onnx_groundtruth->SetLineWidth(1.0);
       hs3diff_onnx_groundtruth->SetLineColor(2);
       hs3diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1590,12 +1671,12 @@ int main()
       hs3diff_onnx_mse_grad->Draw("histsame");
       hs3diff_onnx_msemodified->Draw("histsame");
       hs3diff_onnx_msemodified_grad->Draw("histsame");
-      hs3diff_onnx_bdt->Draw("histsame");
-      hs3diff_onnx_bdt_grad->Draw("histsame");
+      //hs3diff_onnx_bdt->Draw("histsame");
+      //hs3diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(2)->Print("diffs_kstarmumu_s3.eps", "eps");
       c1_->cd(2)->Print("diffs_kstarmumu_s3.root", "root");
       
-      c1_->cd(3)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(3)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs4diff_onnx_groundtruth->SetLineWidth(1.0);
       hs4diff_onnx_groundtruth->SetLineColor(2);
       hs4diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1641,12 +1722,12 @@ int main()
       hs4diff_onnx_mse_grad->Draw("histsame");
       hs4diff_onnx_msemodified->Draw("histsame");
       hs4diff_onnx_msemodified_grad->Draw("histsame");
-      hs4diff_onnx_bdt->Draw("histsame");
-      hs4diff_onnx_bdt_grad->Draw("histsame");
+      //hs4diff_onnx_bdt->Draw("histsame");
+      //hs4diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(3)->Print("diffs_kstarmumu_s4.eps", "eps");
       c1_->cd(3)->Print("diffs_kstarmumu_s4.root", "root");
 
-      c1_->cd(4)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(4)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs5diff_onnx_groundtruth->SetLineWidth(1.0);
       hs5diff_onnx_groundtruth->SetLineColor(2);
       hs5diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1692,12 +1773,12 @@ int main()
       hs5diff_onnx_mse_grad->Draw("histsame");
       hs5diff_onnx_msemodified->Draw("histsame");
       hs5diff_onnx_msemodified_grad->Draw("histsame");
-      hs5diff_onnx_bdt->Draw("histsame");
-      hs5diff_onnx_bdt_grad->Draw("histsame");
+      //hs5diff_onnx_bdt->Draw("histsame");
+      //hs5diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(4)->Print("diffs_kstarmumu_s5.eps", "eps");
       c1_->cd(4)->Print("diffs_kstarmumu_s5.root", "root");
       
-      c1_->cd(5)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(5)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hafbdiff_onnx_groundtruth->SetLineWidth(1.0);
       hafbdiff_onnx_groundtruth->SetLineColor(2);
       hafbdiff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1743,12 +1824,13 @@ int main()
       hafbdiff_onnx_mse_grad->Draw("histsame");
       hafbdiff_onnx_msemodified->Draw("histsame");
       hafbdiff_onnx_msemodified_grad->Draw("histsame");
-      hafbdiff_onnx_bdt->Draw("histsame");
-      hafbdiff_onnx_bdt_grad->Draw("histsame");
+      //hafbdiff_onnx_bdt->Draw("histsame");
+      //hafbdiff_onnx_bdt_grad->Draw("histsame");
+      leg->Draw();
       c1_->cd(5)->Print("diffs_kstarmumu_afb.eps", "eps");
       c1_->cd(5)->Print("diffs_kstarmumu_afb.root", "root");
       
-      c1_->cd(6)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(6)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs7diff_onnx_groundtruth->SetLineWidth(1.0);
       hs7diff_onnx_groundtruth->SetLineColor(2);
       hs7diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1794,12 +1876,12 @@ int main()
       hs7diff_onnx_mse_grad->Draw("histsame");
       hs7diff_onnx_msemodified->Draw("histsame");
       hs7diff_onnx_msemodified_grad->Draw("histsame");
-      hs7diff_onnx_bdt->Draw("histsame");
-      hs7diff_onnx_bdt_grad->Draw("histsame");
+      //hs7diff_onnx_bdt->Draw("histsame");
+      //hs7diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(6)->Print("diffs_kstarmumu_s7.eps", "eps");
       c1_->cd(6)->Print("diffs_kstarmumu_s7.root", "root");
       
-      c1_->cd(7)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(7)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs8diff_onnx_groundtruth->SetLineWidth(1.0);
       hs8diff_onnx_groundtruth->SetLineColor(2);
       hs8diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1845,12 +1927,12 @@ int main()
       hs8diff_onnx_mse_grad->Draw("histsame");
       hs8diff_onnx_msemodified->Draw("histsame");
       hs8diff_onnx_msemodified_grad->Draw("histsame");
-      hs8diff_onnx_bdt->Draw("histsame");
-      hs8diff_onnx_bdt_grad->Draw("histsame");
+      //hs8diff_onnx_bdt->Draw("histsame");
+      //hs8diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(7)->Print("diffs_kstarmumu_s8.eps", "eps");
       c1_->cd(7)->Print("diffs_kstarmumu_s8.root", "root");
 
-      c1_->cd(8)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(8)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs9diff_onnx_groundtruth->SetLineWidth(1.0);
       hs9diff_onnx_groundtruth->SetLineColor(2);
       hs9diff_onnx_groundtruth_grad->SetLineWidth(1.0);
@@ -1896,29 +1978,31 @@ int main()
       hs9diff_onnx_mse_grad->Draw("histsame");
       hs9diff_onnx_msemodified->Draw("histsame");
       hs9diff_onnx_msemodified_grad->Draw("histsame");
-      hs9diff_onnx_bdt->Draw("histsame");
-      hs9diff_onnx_bdt_grad->Draw("histsame");
+      //hs9diff_onnx_bdt->Draw("histsame");
+      //hs9diff_onnx_bdt_grad->Draw("histsame");
       c1_->cd(8)->Print("diffs_kstarmumu_s9.eps", "eps");
       c1_->cd(8)->Print("diffs_kstarmumu_s9.root", "root");
       
-      c1_->cd(9)->SetMargin(0.15, 0.05, 0.15, 0.05);
+      c1_->cd(9)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      /*
       TLegend* leg2 = new TLegend(0.15, 0.15, 0.95, 0.95);
       //leg2->AddEntry(hc1analytic,"analytic truth","l");
+      leg2->AddEntry(hfldiff_bdt,"BDT modeling #epsilon","l");
       leg2->AddEntry(hfldiff_onnx_groundtruth,"ONNX groundtruth","l");
       leg2->AddEntry(hfldiff_onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
       leg2->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX efficiencytruth","l");
       leg2->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
-      leg2->AddEntry(hfldiff_bdt,"BDT modeling #epsilon","l");
       leg2->AddEntry(hfldiff_onnx_direct,"ONNX direct","l");
       leg2->AddEntry(hfldiff_onnx_direct_grad,"ONNX direct grad.","l");
       leg2->AddEntry(hfldiff_onnx_mse,"ONNX mse","l");
       leg2->AddEntry(hfldiff_onnx_mse_grad,"ONNX mse grad.","l");
       leg2->AddEntry(hfldiff_onnx_msemodified,"ONNX msemodified","l");
       leg2->AddEntry(hfldiff_onnx_msemodified_grad,"ONNX msemodified grad.","l");
-      leg2->AddEntry(hfldiff_onnx_bdt,"ONNX bdt","l");
-      leg2->AddEntry(hfldiff_onnx_bdt_grad,"ONNX bdt grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_bdt,"ONNX bdt","l");
+      //leg2->AddEntry(hfldiff_onnx_bdt_grad,"ONNX bdt grad.","l");
       leg2->Draw();
-
+      */
+      leg->Draw();
       c1_->cd(9)->Print("diffs_kstarmumu_legend.eps", "eps");
       c1_->cd(9)->Print("diffs_kstarmumu_legend.root", "root");
 
