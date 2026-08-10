@@ -189,6 +189,7 @@ namespace morefit {
 	}
       case acceptance_type::bdt:
 	{
+	  //return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);//TODO FIXME REMOVE TEST
 	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > prefactors_theta;
 	  for (int i=0; i<this->dimensions_.size(); i++)
 	    {

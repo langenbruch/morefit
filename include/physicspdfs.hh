@@ -256,13 +256,23 @@ namespace morefit {
       Ptr cos2phi = Cos<kernelT,evalT>(2.0*Variable_(phi()->get_name()));
       Ptr sinphi = Sin<kernelT,evalT>(Variable_(phi()->get_name()));
       Ptr sin2phi = Sin<kernelT,evalT>(2.0*Variable_(phi()->get_name()));
-
+      /*
       Ptr eps_ = (Constant_(0.7)+Constant_(0.3)*costhetal->copy())
 	*(Constant_(1.0)-Constant_(0.2)*costhetak->copy()*costhetak->copy())
 	*(Constant_(0.7)+Constant_(0.3)*Sin<kernelT,evalT>(Constant_(2.0)*Variable_(phi()->get_name())));
       //    return (0.7+0.3*ctl)*(1.0-0.2*ctk*ctk)*(0.7+0.3*np.sin(2*phi))
+      */
+      /*
+      Ptr eps_ = (Constant_(0.7)+Constant_(0.3)*costhetal->copy())
+	*(Constant_(1.0)-Constant_(0.2)*costhetak->copy()*costhetak->copy())
+	*(Constant_(0.8)+Constant_(0.2)*Cos<kernelT,evalT>(Constant_(2.0)*Variable_(phi()->get_name())));
+	*/
+      Ptr eps_ = (Constant_(0.7)-Constant_(0.3)*costhetak->copy())
+	*(Constant_(1.0)-Constant_(0.2)*costhetal->copy()*costhetal->copy())
+	*(Constant_(0.9)+Constant_(0.1)*Cos<kernelT,evalT>(Constant_(2.0)*Variable_(phi()->get_name())));
 
       return eps_->copy()*(
+			   //		   (
 	c->copy() * sinthetak2->copy() * 3.0/4.0 * (1.0-Variable_(Fl()->get_name()))
 	+ c->copy() * costhetak2->copy() * Variable_(Fl()->get_name())
 	+ c->copy() * sinthetak2->copy() * cos2thetal->copy() * 1.0/4.0 * (1.0-Variable_(Fl()->get_name()))
@@ -282,12 +292,6 @@ namespace morefit {
       constexpr auto Constant_ = &Constant<kernelT, evalT>;
       typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
       /*
-def analytic_integral(fl, s3, s4, s5, afb, s7, s8, s9):
-    j1s = 3.0/4.0*(1.0-fl)    
-    j6s = 4.0/3.0*afb
-    j9 = s9
-    return (63.0*j9)/625.0+(63.0*j6s)/625.0+(98.0*j1s)/1875.0+539.0/1250.0
-       */
       Ptr j1s = Constant_(3.0/4.0)*(Constant_(1.0) - Variable_(Fl()->get_name()));
       Ptr j6s = Constant_(4.0/3.0)*Variable_(Afb()->get_name());
       Ptr j9 = Variable_(S9()->get_name());
@@ -295,6 +299,15 @@ def analytic_integral(fl, s3, s4, s5, afb, s7, s8, s9):
 	+ Constant_(63.0/625.0)*j6s->copy()
 	+ Constant_(98.0/1875.0)*j1s->copy()
 	+ Constant_(539.0/1250.0);
+      */
+      Ptr j1s = Constant_(3.0/4.0)*(Constant_(1.0) - Variable_(Fl()->get_name()));
+      //Ptr j6s = Constant_(4.0/3.0)*Variable_(Afb()->get_name());
+      Ptr j3 = Variable_(S3()->get_name());
+      //(21.0*j3)/625.0-(21.0*j1s)/625.0+378.0/625.0
+      return Constant_(21.0/625.0)*j3->copy()
+	- Constant_(21.0/625.0)*j1s->copy()
+	+ Constant_(378.0/625.0);
+      
     }
     //TODO, JUST USED FOR PLOTTING
   virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral() const override 
@@ -302,7 +315,6 @@ def analytic_integral(fl, s3, s4, s5, afb, s7, s8, s9):
       //to avoid typing template arguments
       constexpr auto Constant_ = &Constant<kernelT, evalT>;
       constexpr auto Variable_ = &Variable<kernelT, evalT>;
-      //auto Sin_ = [](std::unique_ptr<ComputeGraphNode<kernelT, evalT>> A) {return Sin<kernelT,evalT>(std::move(A));};
       typedef std::unique_ptr<ComputeGraphNode<kernelT,evalT>> Ptr;
 
       Ptr ctk_from_2 = Variable_(ctk()->get_from_name())*Variable_(ctk()->get_from_name());
