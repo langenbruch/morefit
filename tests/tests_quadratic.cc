@@ -385,20 +385,21 @@ int main()
 	maxy = hc2diff3->GetMaximum();
       hc2diff->SetMaximum(maxy*1.1);
       
-      TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 800);
+      TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 600);
       c0_->Divide(2,1);
       c0_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hc1analytic->SetLineWidth(2.0);
       hc1onnx->SetLineWidth(2.0);
       hc1onnx->SetLineColor(2);
       hc1onnxgrad->SetLineWidth(2.0);
-      hc1onnxgrad->SetLineColor(kOrange);
+      hc1onnxgrad->SetLineColor(kMagenta);
       hc1bdt->SetLineWidth(2.0);
       hc1bdt->SetLineColor(4);
       hc1analytic->Draw("hist");
       hc1onnx->Draw("histsame");
       hc1onnxgrad->Draw("histsame");      
       hc1bdt->Draw("histsame");
+      hc1analytic->Draw("histsame");
       TLine* line = new TLine();
       line->SetLineStyle(kDashed);
       line->DrawLine(genc1, 0.0, genc1, hc1analytic->GetMaximum());
@@ -416,25 +417,26 @@ int main()
       hc2onnx->SetLineWidth(2.0);
       hc2onnx->SetLineColor(2);
       hc2onnxgrad->SetLineWidth(2.0);
-      hc2onnxgrad->SetLineColor(kOrange);
+      hc2onnxgrad->SetLineColor(kMagenta);
       hc2bdt->SetLineWidth(2.0);
       hc2bdt->SetLineColor(4);
       hc2analytic->Draw("hist");
       hc2onnx->Draw("histsame");      
       hc2onnxgrad->Draw("histsame");      
       hc2bdt->Draw("histsame");
+      hc1analytic->Draw("histsame");
       line->DrawLine(genc2, 0.0, genc2, hc2analytic->GetMaximum());
       tex->DrawLatex(genc2-0.05, 0.8*hc2analytic->GetMaximum(), "c_{2} generated");      
       leg->Draw();
       c0_->Print("diffs.eps", "eps");
       
-      TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 800);
+      TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 600);
       c1_->Divide(2,1);
       c1_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hc1diff->SetLineWidth(2.0);
       hc1diff->SetLineColor(2);
       hc1diff2->SetLineWidth(2.0);
-      hc1diff2->SetLineColor(kOrange);
+      hc1diff2->SetLineColor(kMagenta);
       hc1diff3->SetLineWidth(2.0);
       hc1diff3->SetLineColor(4);
       hc1diff->Draw("hist");
@@ -445,7 +447,7 @@ int main()
       hc2diff->SetLineWidth(2.0);      
       hc2diff->SetLineColor(2);
       hc2diff2->SetLineWidth(2.0);      
-      hc2diff2->SetLineColor(kOrange);
+      hc2diff2->SetLineColor(kMagenta);
       hc2diff3->SetLineWidth(2.0);      
       hc2diff3->SetLineColor(4);
       hc2diff->Draw("hist");
@@ -758,8 +760,8 @@ int main()
       gStyle->SetLegendFont(132);
       
       double dx = 0.2;
-      double dxdiff = 0.1;
-      unsigned int nbins = 50;
+      double dxdiff = 0.2;
+      unsigned int nbins = 100;
       TH1D* hc1analytic = new TH1D("hc1analytic", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2analytic = new TH1D("hc2analytic", ";c_{2};#entries", nbins, -dx, +dx);
       
@@ -906,7 +908,7 @@ int main()
       hc1diff_onnx_groundtruth_grad->SetMaximum(hc1diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hc2diff_onnx_groundtruth_grad->SetMaximum(hc2diff_onnx_groundtruth_grad->GetMaximum()*1.25);
  
-      TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 800);
+      TCanvas* c0_ = new TCanvas("c0", "c0", 1600, 600);
       c0_->Divide(2,1);
       c0_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hc1analytic->SetLineWidth(1.0);
@@ -927,14 +929,14 @@ int main()
       hc1onnx_mse_grad->SetLineColor(4);
       hc1onnx_mse_grad->SetLineStyle(kDashed);      
       hc1onnx_msemodified->SetLineWidth(1.0);
-      hc1onnx_msemodified->SetLineColor(kMagenta+1);
+      hc1onnx_msemodified->SetLineColor(kOrange);
       hc1onnx_msemodified_grad->SetLineWidth(1.0);
-      hc1onnx_msemodified_grad->SetLineColor(kMagenta+1);
+      hc1onnx_msemodified_grad->SetLineColor(kOrange);
       hc1onnx_msemodified_grad->SetLineStyle(kDashed);      
       hc1onnx_bdt->SetLineWidth(1.0);
-      hc1onnx_bdt->SetLineColor(kOrange);
+      hc1onnx_bdt->SetLineColor(kMagenta);
       hc1onnx_bdt_grad->SetLineWidth(1.0);
-      hc1onnx_bdt_grad->SetLineColor(kOrange);
+      hc1onnx_bdt_grad->SetLineColor(kMagenta);
       hc1onnx_bdt_grad->SetLineStyle(kDashed);      
       hc1onnx_efficiencytruth->SetLineWidth(1.0);
       hc1onnx_efficiencytruth->SetLineColor(7);
@@ -1003,14 +1005,14 @@ int main()
       hc2onnx_mse_grad->SetLineColor(4);
       hc2onnx_mse_grad->SetLineStyle(kDashed);      
       hc2onnx_msemodified->SetLineWidth(1.0);
-      hc2onnx_msemodified->SetLineColor(kMagenta+1);
+      hc2onnx_msemodified->SetLineColor(kOrange);
       hc2onnx_msemodified_grad->SetLineWidth(1.0);
-      hc2onnx_msemodified_grad->SetLineColor(kMagenta+1);
+      hc2onnx_msemodified_grad->SetLineColor(kOrange);
       hc2onnx_msemodified_grad->SetLineStyle(kDashed);      
       hc2onnx_bdt->SetLineWidth(1.0);
-      hc2onnx_bdt->SetLineColor(kOrange);
+      hc2onnx_bdt->SetLineColor(kMagenta);
       hc2onnx_bdt_grad->SetLineWidth(1.0);
-      hc2onnx_bdt_grad->SetLineColor(kOrange);
+      hc2onnx_bdt_grad->SetLineColor(kMagenta);
       hc2onnx_bdt_grad->SetLineStyle(kDashed);      
       hc2onnx_efficiencytruth->SetLineWidth(1.0);
       hc2onnx_efficiencytruth->SetLineColor(7);
@@ -1043,7 +1045,7 @@ int main()
       c0_->Print("values.eps", "eps");
       c0_->Print("values.root", "root");
       
-      TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 800);
+      TCanvas* c1_ = new TCanvas("c1", "c1", 1600, 600);
       c1_->Divide(2,1);
       c1_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
 
@@ -1063,14 +1065,14 @@ int main()
       hc1diff_onnx_mse_grad->SetLineColor(4);
       hc1diff_onnx_mse_grad->SetLineStyle(kDashed);      
       hc1diff_onnx_msemodified->SetLineWidth(1.0);
-      hc1diff_onnx_msemodified->SetLineColor(kMagenta+1);
+      hc1diff_onnx_msemodified->SetLineColor(kOrange);
       hc1diff_onnx_msemodified_grad->SetLineWidth(1.0);
-      hc1diff_onnx_msemodified_grad->SetLineColor(kMagenta+1);
+      hc1diff_onnx_msemodified_grad->SetLineColor(kOrange);
       hc1diff_onnx_msemodified_grad->SetLineStyle(kDashed);      
       hc1diff_onnx_bdt->SetLineWidth(1.0);
-      hc1diff_onnx_bdt->SetLineColor(kOrange);
+      hc1diff_onnx_bdt->SetLineColor(kMagenta);
       hc1diff_onnx_bdt_grad->SetLineWidth(1.0);
-      hc1diff_onnx_bdt_grad->SetLineColor(kOrange);
+      hc1diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hc1diff_onnx_bdt_grad->SetLineStyle(kDashed);      
       hc1diff_onnx_efficiencytruth->SetLineWidth(1.0);
       hc1diff_onnx_efficiencytruth->SetLineColor(7);
@@ -1102,6 +1104,8 @@ int main()
       leg2->AddEntry(hc1bdt,"BDT modeling #epsilon","l");
       leg2->AddEntry(hc1onnx_groundtruth,"ONNX groundtruth","l");
       leg2->AddEntry(hc1onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
+      leg2->AddEntry(hc1onnx_efficiencytruth,"ONNX efficiencytruth","l");
+      leg2->AddEntry(hc1onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
       leg2->AddEntry(hc1onnx_direct,"ONNX direct","l");
       leg2->AddEntry(hc1onnx_direct_grad,"ONNX direct grad.","l");
       leg2->AddEntry(hc1onnx_mse,"ONNX mse","l");
@@ -1110,8 +1114,6 @@ int main()
       leg2->AddEntry(hc1onnx_msemodified_grad,"ONNX msemodified grad.","l");
       //leg2->AddEntry(hc1onnx_bdt,"ONNX bdt","l");
       //leg2->AddEntry(hc1onnx_bdt_grad,"ONNX bdt grad.","l");
-      leg2->AddEntry(hc1onnx_efficiencytruth,"ONNX efficiencytruth","l");
-      leg2->AddEntry(hc1onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
       leg2->Draw();
       c1_->cd(1)->Print("diffs_c1.eps", "eps");
       c1_->cd(1)->Print("diffs_c1.root", "root");
@@ -1134,14 +1136,14 @@ int main()
       hc2diff_onnx_mse_grad->SetLineColor(4);
       hc2diff_onnx_mse_grad->SetLineStyle(kDashed);      
       hc2diff_onnx_msemodified->SetLineWidth(1.0);
-      hc2diff_onnx_msemodified->SetLineColor(kMagenta+1);
+      hc2diff_onnx_msemodified->SetLineColor(kOrange);
       hc2diff_onnx_msemodified_grad->SetLineWidth(1.0);
-      hc2diff_onnx_msemodified_grad->SetLineColor(kMagenta+1);
+      hc2diff_onnx_msemodified_grad->SetLineColor(kOrange);
       hc2diff_onnx_msemodified_grad->SetLineStyle(kDashed);      
       hc2diff_onnx_bdt->SetLineWidth(1.0);
-      hc2diff_onnx_bdt->SetLineColor(kOrange);
+      hc2diff_onnx_bdt->SetLineColor(kMagenta);
       hc2diff_onnx_bdt_grad->SetLineWidth(1.0);
-      hc2diff_onnx_bdt_grad->SetLineColor(kOrange);
+      hc2diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hc2diff_onnx_bdt_grad->SetLineStyle(kDashed);      
       hc2diff_onnx_efficiencytruth->SetLineWidth(1.0);
       hc2diff_onnx_efficiencytruth->SetLineColor(7);
