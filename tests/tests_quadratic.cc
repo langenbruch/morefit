@@ -142,7 +142,7 @@ int main()
   morefit::compute_options compute_opts;
   compute_opts.opencl_platform = 0; compute_opts.opencl_device = 0;  
   compute_opts.llvm_nthreads = 1;
-  compute_opts.print_kernel = false;
+  compute_opts.print_kernel = true;
   compute_opts.llvm_print_intermediate = false;
   compute_opts.print();
   
@@ -491,7 +491,8 @@ int main()
     {
 
       unsigned int nmodels = 100;
-
+      nmodels = 10;
+      
       //toy study
       unsigned int nruns = 1;
       std::vector<double> c1_values_analytic(nmodels*nruns, 0.0);
@@ -555,6 +556,11 @@ int main()
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_efficiencytruth_grad(&x, &c1, &c2, ("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
 	  
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_bdt(&x, &c1, &c2);
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse2(&x, &c1, &c2);
+	  //quadratic_onnx_mse2.set_acceptance_nn("", "weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_mse2.set_acceptance_nn("weights/mlp_direct_accvsrej_mse_"+std::to_string(m)+".onnx", "weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
+	  //"weights/torch_efficiency_1D_models_{idx}.pth"
 	  
 	  morefit::EventVector<kernelT, evalT> eff;
 #ifdef WITH_ROOT
@@ -646,7 +652,17 @@ int main()
 	      std::cout << "ONNX_MSE RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
 	      std::cout << "ONNX_MSE RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
 	      c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
-	      c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();	  
+	      c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
+
+	      //quadratic_onnx_mse2.
+	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
+	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
+	      fit.fit(&quadratic_onnx_mse2, params, &result);
+	      std::cout << "ONNX_MSE2 RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
+	      std::cout << "ONNX_MSE2 RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
+	      //c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
+	      //c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
+	      
 	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
 	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
 	      fit.fit(&quadratic_onnx_mse_grad, params, &result);

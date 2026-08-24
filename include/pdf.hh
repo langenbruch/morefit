@@ -34,8 +34,17 @@ namespace morefit {
     std::vector<parameter<evalT>*> parameters_;//pointers allow settings to be changed (eg. fix parameters) after object (in this case pdf) creation
     std::vector<PDF<kernelT, evalT>*> children_;
     //bool has_acceptance_{false};    
-    enum acceptance_type {none, histogram, bdt};
-    acceptance_type acceptance_type_{acceptance_type::none};
+    //enum acceptance_type {none, histogram, bdt};
+    //nn eff (MC integration), nn eff and nn norm (two different NNs), nn norm only
+    //bdt (both eff and norm), bdt norm only
+    //histo (both eff and norm), histo norm only
+    enum efficiency_type {eff_none, eff_histogram, eff_bdt, eff_nn};
+    enum normalisation_type {norm_analytic, norm_montecarlo, norm_histogram, norm_bdt, norm_nn};
+    //
+    efficiency_type efficiency_type_{efficiency_type::eff_none};
+    normalisation_type normalisation_type_{normalisation_type::norm_analytic};
+    //
+    //acceptance_type acceptance_type_{acceptance_type::none};
     enum montecarlo_type {flat, importance_sampling};
     montecarlo_type montecarlo_type_{montecarlo_type::flat};
     EventVector<kernelT, evalT>* acceptance_vector_{nullptr};
@@ -44,6 +53,9 @@ namespace morefit {
     std::vector<int> acceptance_bins_;
     std::vector<dimension<evalT>> acceptance_dims_;
     std::vector<dimension<evalT>> montecarlo_dims_;
+    //
+    std::string eff_nn_filename_{""};
+    std::string norm_nn_filename_{""};
   public:
     void prepare_monte_carlo(EventVector<kernelT, evalT>& montecarlo_vector, int nsamples)
     {
@@ -88,7 +100,8 @@ namespace morefit {
 	acceptance_vector.operator()(j, 0) = 1.0;//initialisation
 
       acceptance_vector_ = &acceptance_vector;
-      acceptance_type_ = acceptance_type::bdt;
+      efficiency_type_ = efficiency_type::eff_bdt;
+      normalisation_type_ = normalisation_type::norm_bdt;
     }
     void set_acceptance_histo(EventVector<kernelT, evalT>& acceptance_vector, std::vector<int> nbins)
     {
@@ -134,7 +147,22 @@ namespace morefit {
       
       acceptance_vector_ = &acceptance_vector;
       acceptance_bins_ = nbins;
-      acceptance_type_ = acceptance_type::histogram;
+      //acceptance_type_ = acceptance_type::histogram;
+      efficiency_type_ = efficiency_type::eff_histogram;
+      normalisation_type_ = normalisation_type::norm_histogram;
+    }
+    void set_acceptance_nn(std::string eff_filename, std::string norm_filename)
+    {
+      if (eff_filename != "")
+	{
+	  eff_nn_filename_ = eff_filename;
+	  efficiency_type_ = efficiency_type::eff_nn;
+	}
+      if (norm_filename != "")
+	{
+	  norm_nn_filename_ = norm_filename;
+	  normalisation_type_ = normalisation_type::norm_nn;
+	}
     }
     unsigned int nparameters()
     {
@@ -166,11 +194,11 @@ namespace morefit {
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> efficiency() const
     {
       //return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);//FIXME REMOVE TEST
-      switch (acceptance_type_) {
-      case acceptance_type::none:
+      switch (efficiency_type_) {
+      case efficiency_type::eff_none:
 	return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);
 	break;
-      case acceptance_type::histogram:
+      case efficiency_type::eff_histogram:
 	//assumes the eventvector efficiency as first column
 	//need to determine index from dimension variables, in 1D idx = int((x-xmin)/(xmax-xmin)),
 	{
@@ -187,7 +215,7 @@ namespace morefit {
 	    }
 	  return std::make_unique<EventVectorNode<kernelT,evalT>>(acceptance_vector_, std::make_unique<SumNode<kernelT, evalT>>(std::move(index_sum_children)), 0);
 	}
-      case acceptance_type::bdt:
+      case efficiency_type::eff_bdt:
 	{
 	  //return std::make_unique<ConstantNode<kernelT, evalT>>(1.0);//TODO FIXME REMOVE TEST
 	  std::vector<std::unique_ptr<ComputeGraphNode<kernelT, evalT>> > prefactors_theta;
@@ -204,10 +232,16 @@ namespace morefit {
 	  std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prefactor = std::make_unique<ProdNode<kernelT, evalT>>(std::move(prefactors_theta));
 	  return std::make_unique<LoopAndSumNode<kernelT,evalT>>(acceptance_vector_, "morefit_index_" + IDCreator::Instance()->get_name(),
 								 Variable<kernelT,evalT>(acceptance_dims_.at(0).get_name())*std::move(prefactor));
-
+	}
+      case efficiency_type::eff_nn:
+	{
+	  std::vector<std::string> inputs;
+	  for (unsigned int i=0; i<this->dimensions_.size(); i++)
+	    inputs.push_back(this->dimensions_.at(i)->get_name());
+	  return std::make_unique<OnnxNode<kernelT, evalT>>("OnnxEff"+IDCreator::Instance()->get_name(), eff_nn_filename_, inputs);
 	}
       default:
-	std::cout << "Acceptance method not implemented." << std::endl;
+	std::cout << "Efficiency method not implemented." << std::endl;
 	assert(0);
 	break;
       }
@@ -215,11 +249,12 @@ namespace morefit {
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> prob_eff() const
     {
-      switch (acceptance_type_) {
-      case acceptance_type::none:
+      switch (efficiency_type_) {
+      case efficiency_type::eff_none:
 	return prob();
-      case acceptance_type::histogram:
-      case acceptance_type::bdt:
+      case efficiency_type::eff_histogram:
+      case efficiency_type::eff_bdt:
+      case efficiency_type::eff_nn:
 	return std::make_unique<ProdNode<kernelT, evalT>>(std::move(efficiency()), std::move(prob()));
       default:
 	std::cout << "Acceptance method not implemented." << std::endl;
@@ -232,11 +267,11 @@ namespace morefit {
     }
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> norm_eff() const
     {
-      switch (acceptance_type_) {
-      case acceptance_type::none:
+      switch (normalisation_type_) {
+      case normalisation_type::norm_analytic:
 	return norm();
-      case acceptance_type::histogram:
-      case acceptance_type::bdt://should be identical to above
+      case normalisation_type::norm_histogram:
+      case normalisation_type::norm_bdt://should be identical to above
 	{
 	  if (this->provides_analytic_norm())
 	    {
@@ -261,19 +296,26 @@ namespace morefit {
 	      return norm();
 	    }
 	}
+      case normalisation_type::norm_nn:
+	{
+	  std::vector<std::string> inputs;
+	  for (unsigned int i=0; i<this->parameters_.size(); i++)
+	    inputs.push_back(this->parameters_.at(i)->get_name());
+	  return std::make_unique<OnnxNode<kernelT, evalT>>("OnnxNorm"+IDCreator::Instance()->get_name(), norm_nn_filename_, inputs);
+	}
       default:
-	std::cout << "Acceptance method not implemented." << std::endl;
+	std::cout << "Normalisation method not implemented." << std::endl;
 	assert(0);	
       }
     }
     //only used for plotting!
     virtual std::unique_ptr<ComputeGraphNode<kernelT, evalT>> definite_integral_eff() const
     {
-      switch (acceptance_type_) {
-      case acceptance_type::none:
+      switch (normalisation_type_) {
+      case normalisation_type::norm_analytic:
 	return definite_integral();
-      case acceptance_type::histogram:
-      case acceptance_type::bdt:
+      case normalisation_type::norm_histogram:
+      case normalisation_type::norm_bdt:
 	//return std::make_unique<ProdNode<kernelT, evalT>>(std::move(efficiency()), std::move(definite_integral()));
 	{
 	  //general approach working for multiple dimensions, but potentially slower
