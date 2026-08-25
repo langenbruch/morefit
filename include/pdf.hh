@@ -151,13 +151,14 @@ namespace morefit {
       efficiency_type_ = efficiency_type::eff_histogram;
       normalisation_type_ = normalisation_type::norm_histogram;
     }
-    void set_acceptance_nn(std::string eff_filename, std::string norm_filename)
+    //void set_acceptance_nn(std::string eff_filename, std::string norm_filename)
+    void set_acceptance_nn(std::string norm_filename)
     {
-      if (eff_filename != "")
-	{
-	  eff_nn_filename_ = eff_filename;
-	  efficiency_type_ = efficiency_type::eff_nn;
-	}
+      // if (eff_filename != "")
+      // 	{
+      // 	  eff_nn_filename_ = eff_filename;
+      // 	  efficiency_type_ = efficiency_type::eff_nn;
+      // 	}
       if (norm_filename != "")
 	{
 	  norm_nn_filename_ = norm_filename;

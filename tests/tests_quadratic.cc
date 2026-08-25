@@ -142,7 +142,7 @@ int main()
   morefit::compute_options compute_opts;
   compute_opts.opencl_platform = 0; compute_opts.opencl_device = 0;  
   compute_opts.llvm_nthreads = 1;
-  compute_opts.print_kernel = true;
+  compute_opts.print_kernel = false;
   compute_opts.llvm_print_intermediate = false;
   compute_opts.print();
   
@@ -491,10 +491,10 @@ int main()
     {
 
       unsigned int nmodels = 100;
-      nmodels = 10;
+      //nmodels = 10;
       
       //toy study
-      unsigned int nruns = 1;
+      unsigned int nruns = 10;
       std::vector<double> c1_values_analytic(nmodels*nruns, 0.0);
       std::vector<double> c2_values_analytic(nmodels*nruns, 0.0);
       
@@ -536,7 +536,7 @@ int main()
 	{
 	  
 	  morefit::QuadraticPDFNormalisedAnalyticEps<kernelT, evalT> quadratic_analytic(&x, &c1, &c2);
-
+	  /*
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_groundtruth(&x, &c1, &c2, ("weights/torch_model_groundtruth_"+std::to_string(m)+".onnx").c_str());	  
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_groundtruth_grad(&x, &c1, &c2, ("weights/torch_model_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
 	  
@@ -554,14 +554,45 @@ int main()
 	  
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_efficiencytruth(&x, &c1, &c2, ("weights/torch_model_efficiency_truth_"+std::to_string(m)+".onnx").c_str());	  
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_efficiencytruth_grad(&x, &c1, &c2, ("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
-	  
+	  */
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_bdt(&x, &c1, &c2);
+
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_groundtruth(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_groundtruth_grad(&x, &c1, &c2);
 	  
-	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse2(&x, &c1, &c2);
-	  //quadratic_onnx_mse2.set_acceptance_nn("", "weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_mse2.set_acceptance_nn("weights/mlp_direct_accvsrej_mse_"+std::to_string(m)+".onnx", "weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
-	  //"weights/torch_efficiency_1D_models_{idx}.pth"
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_direct(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_direct_grad(&x, &c1, &c2);
 	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse_grad(&x, &c1, &c2);
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_msemodified(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_msemodified_grad(&x, &c1, &c2);
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_bdt(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_bdt_grad(&x, &c1, &c2);
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_efficiencytruth(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_efficiencytruth_grad(&x, &c1, &c2);
+	  
+	  quadratic_onnx_groundtruth.set_acceptance_nn("weights/torch_model_groundtruth_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_groundtruth_grad.set_acceptance_nn("weights/torch_model_groundtruth_grad_"+std::to_string(m)+".onnx");
+	  
+	  quadratic_onnx_direct.set_acceptance_nn("weights/torch_model_direct_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_direct_grad.set_acceptance_nn("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx");
+
+	  quadratic_onnx_mse.set_acceptance_nn("weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_mse_grad.set_acceptance_nn("weights/torch_model_efficiency_mse_grad_"+std::to_string(m)+".onnx");
+
+	  quadratic_onnx_msemodified.set_acceptance_nn("weights/torch_model_efficiency_msemodified_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_msemodified_grad.set_acceptance_nn("weights/torch_model_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
+	  
+	  quadratic_onnx_bdt.set_acceptance_nn("weights/torch_model_bdt_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bdt_grad.set_acceptance_nn("weights/torch_model_bdt_grad_"+std::to_string(m)+".onnx");
+
+	  quadratic_onnx_efficiencytruth.set_acceptance_nn("weights/torch_model_efficiency_truth_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_efficiencytruth_grad.set_acceptance_nn("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx");
+
 	  morefit::EventVector<kernelT, evalT> eff;
 #ifdef WITH_ROOT
 	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_"+std::to_string(m)+".root").c_str(), "READ");
@@ -583,6 +614,7 @@ int main()
 #endif      
       
 	  unsigned int ngen = 100000;//00;
+	  ngen = 10000;
 	  std::cout <<"generating" << std::endl;
 	  morefit::generator_options gen_opts;
       
@@ -654,6 +686,7 @@ int main()
 	      c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
 	      c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
 
+	      /*
 	      //quadratic_onnx_mse2.
 	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
 	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
@@ -662,6 +695,7 @@ int main()
 	      std::cout << "ONNX_MSE2 RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
 	      //c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
 	      //c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
+	      */
 	      
 	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
 	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
