@@ -700,9 +700,15 @@ int main()
 
       unsigned int nmodels = 100;
       unsigned int ngen = 100000;//00;
-
+      ngen = 10000;
+      
       //toy study
-      unsigned int nruns = 1;
+      unsigned int nruns = 20;
+
+      double dx = 0.1;
+      double dxdiff = 0.05;
+      unsigned int nbins = 80;
+
       std::vector<double> fl_values_analytic(nmodels*nruns, 0.0);      
       std::vector<double> s3_values_analytic(nmodels*nruns, 0.0);
       std::vector<double> s4_values_analytic(nmodels*nruns, 0.0);
@@ -765,6 +771,24 @@ int main()
       std::vector<double> s7_values_onnx_mse_grad(nmodels*nruns, 0.0);
       std::vector<double> s8_values_onnx_mse_grad(nmodels*nruns, 0.0);
       std::vector<double> s9_values_onnx_mse_grad(nmodels*nruns, 0.0);
+
+      std::vector<double> fl_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_onnx_bce(nmodels*nruns, 0.0);
+      
+      std::vector<double> fl_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_onnx_bce_grad(nmodels*nruns, 0.0);
 
       std::vector<double> fl_values_onnx_msemodified(nmodels*nruns, 0.0);
       std::vector<double> s3_values_onnx_msemodified(nmodels*nruns, 0.0);
@@ -830,35 +854,71 @@ int main()
       std::vector<double> s8_values_bdt(nmodels*nruns, 0.0);
       std::vector<double> s9_values_bdt(nmodels*nruns, 0.0);
 
+      std::vector<double> fl_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s3_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_bdt_modified(nmodels*nruns, 0.0);
+
       for (unsigned int m=0; m<nmodels; m++)
 	{
 	  std::cout << "model " << m << std::endl;
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
-	  
+
+	  /*
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_direct(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_direct_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_mse(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_mse_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bce(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx").c_str());
+	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bce_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_msemodified(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_msemodified_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_msemodified_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_msemodified_grad_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bdt_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_efficiencytruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_efficiencytruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
+	  */
 	  
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx").c_str());
-	  
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
-	  //morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx").c_str());
-	  
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_groundtruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_groundtruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_direct(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_direct_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_mse(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_mse_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_bce(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_bce_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_msemodified(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_msemodified_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_bdt_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_efficiencytruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_efficiencytruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+
+	  kstarmumu_onnx_groundtruth.set_acceptance_nn("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_groundtruth_grad.set_acceptance_nn("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_direct.set_acceptance_nn("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_direct_grad.set_acceptance_nn("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_mse.set_acceptance_nn("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_mse_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bce.set_acceptance_nn("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bce_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_msemodified.set_acceptance_nn("weights/torch_model_3D_efficiency_msemodified_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_msemodified_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bdt.set_acceptance_nn("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bdt_grad.set_acceptance_nn("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_efficiencytruth.set_acceptance_nn("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_efficiencytruth_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx");
+
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt_modified(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::EventVector<kernelT, evalT> eff;
+	  morefit::EventVector<kernelT, evalT> eff_modified;
 	  std::cout << "after pdfs" << std::endl;
 #ifdef WITH_ROOT
 	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_kstarmumu_"+std::to_string(m)+".root").c_str(), "READ");
@@ -885,6 +945,29 @@ int main()
 	      eff(i,6) = phi_to;
 	    }
 	  //eff.print();
+	  TFile* bdt_file_modified = new TFile(("weights/bdt_direct_accvsall_msemodified_kstarmumu_"+std::to_string(m)+".root").c_str(), "READ");
+	  TTree* tree_modified = (TTree*)bdt_file_modified->Get("xgboost_regression");
+	  unsigned int nnodes_modified = tree_modified->GetEntries();      
+	  kstarmumu_bdt_modified.set_acceptance_bdt(eff_modified, nnodes_modified);
+	  tree_modified->SetBranchAddress("f0_from", &ctl_from);
+	  tree_modified->SetBranchAddress("f0_to", &ctl_to);
+	  tree_modified->SetBranchAddress("f1_from", &ctk_from);
+	  tree_modified->SetBranchAddress("f1_to", &ctk_to);
+	  tree_modified->SetBranchAddress("f2_from", &phi_from);
+	  tree_modified->SetBranchAddress("f2_to", &phi_to);
+	  tree_modified->SetBranchAddress("value", &value);
+	  for (unsigned int i=0; i<tree_modified->GetEntries(); i++)
+	    {
+	      tree_modified->GetEntry(i);
+	      eff_modified(i,0) = value;
+	      eff_modified(i,1) = ctl_from;
+	      eff_modified(i,2) = ctl_to;
+	      eff_modified(i,3) = ctk_from;
+	      eff_modified(i,4) = ctk_to;
+	      eff_modified(i,5) = phi_from;
+	      eff_modified(i,6) = phi_to;
+	    }
+	  
 #endif      
       
 	  std::cout <<"generating" << std::endl;
@@ -1070,6 +1153,45 @@ int main()
 	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
 	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
 	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting onnx_bce" << std::endl;
+	      fit.fit(&kstarmumu_onnx_bce, params, &result);	      
+	      fl_values_onnx_bce.at(m*nruns+i) = Fl.get_value();
+	      s3_values_onnx_bce.at(m*nruns+i) = S3.get_value();
+	      s4_values_onnx_bce.at(m*nruns+i) = S4.get_value();
+	      s5_values_onnx_bce.at(m*nruns+i) = S5.get_value();
+	      afb_values_onnx_bce.at(m*nruns+i) = Afb.get_value();
+	      s7_values_onnx_bce.at(m*nruns+i) = S7.get_value();
+	      s8_values_onnx_bce.at(m*nruns+i) = S8.get_value();
+	      s9_values_onnx_bce.at(m*nruns+i) = S9.get_value();
+	  
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting onnx_bce grad" << std::endl;
+	      fit.fit(&kstarmumu_onnx_bce_grad, params, &result);
+	      fl_values_onnx_bce_grad.at(m*nruns+i) = Fl.get_value();
+	      s3_values_onnx_bce_grad.at(m*nruns+i) = S3.get_value();
+	      s4_values_onnx_bce_grad.at(m*nruns+i) = S4.get_value();
+	      s5_values_onnx_bce_grad.at(m*nruns+i) = S5.get_value();
+	      afb_values_onnx_bce_grad.at(m*nruns+i) = Afb.get_value();
+	      s7_values_onnx_bce_grad.at(m*nruns+i) = S7.get_value();
+	      s8_values_onnx_bce_grad.at(m*nruns+i) = S8.get_value();
+	      s9_values_onnx_bce_grad.at(m*nruns+i) = S9.get_value();
+
+
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
 	      std::cout << "fitting onnx_msemodified" << std::endl;
 	      fit.fit(&kstarmumu_onnx_msemodified, params, &result);	      
 	      fl_values_onnx_msemodified.at(m*nruns+i) = Fl.get_value();
@@ -1219,10 +1341,30 @@ int main()
 	      s8_values_bdt.at(m*nruns+i) = S8.get_value();
 	      s9_values_bdt.at(m*nruns+i) = S9.get_value();
 
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting bdt" << std::endl;
+	      fit.fit(&kstarmumu_bdt_modified, params, &result);
+
+	      fl_values_bdt_modified.at(m*nruns+i) = Fl.get_value();
+	      s3_values_bdt_modified.at(m*nruns+i) = S3.get_value();
+	      s4_values_bdt_modified.at(m*nruns+i) = S4.get_value();
+	      s5_values_bdt_modified.at(m*nruns+i) = S5.get_value();
+	      afb_values_bdt_modified.at(m*nruns+i) = Afb.get_value();
+	      s7_values_bdt_modified.at(m*nruns+i) = S7.get_value();
+	      s8_values_bdt_modified.at(m*nruns+i) = S8.get_value();
+	      s9_values_bdt_modified.at(m*nruns+i) = S9.get_value();
+
 	    }
 	}
 
-      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "msemodified", "msemodified grad"};
+      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad"};
       std::vector<std::vector<double>> analytic_values = {fl_values_analytic, s3_values_analytic, s4_values_analytic, s5_values_analytic, afb_values_analytic, s7_values_analytic, s8_values_analytic, s9_values_analytic};
       std::vector<std::string> observables = {"$F_{\\mathrm{L}}$", "$S_{3}$", "$S_{4}$", "$S_{5}$", "$A_{\\mathrm{FB}}$", "$S_{7}$", "$S_{8}$", "$S_{9}$"};
       std::vector<std::vector<double>> values_onnx_groundtruth = {fl_values_onnx_groundtruth, s3_values_onnx_groundtruth, s4_values_onnx_groundtruth, s5_values_onnx_groundtruth, afb_values_onnx_groundtruth, s7_values_onnx_groundtruth, s8_values_onnx_groundtruth, s9_values_onnx_groundtruth};
@@ -1230,21 +1372,26 @@ int main()
       std::vector<std::vector<double>> values_onnx_efficiencytruth = {fl_values_onnx_efficiencytruth, s3_values_onnx_efficiencytruth, s4_values_onnx_efficiencytruth, s5_values_onnx_efficiencytruth, afb_values_onnx_efficiencytruth, s7_values_onnx_efficiencytruth, s8_values_onnx_efficiencytruth, s9_values_onnx_efficiencytruth};
       std::vector<std::vector<double>> values_onnx_efficiencytruth_grad = {fl_values_onnx_efficiencytruth_grad, s3_values_onnx_efficiencytruth_grad, s4_values_onnx_efficiencytruth_grad, s5_values_onnx_efficiencytruth_grad, afb_values_onnx_efficiencytruth_grad, s7_values_onnx_efficiencytruth_grad, s8_values_onnx_efficiencytruth_grad, s9_values_onnx_efficiencytruth_grad};
       std::vector<std::vector<double>> values_bdt = {fl_values_bdt, s3_values_bdt, s4_values_bdt, s5_values_bdt, afb_values_bdt, s7_values_bdt, s8_values_bdt, s9_values_bdt};
+      std::vector<std::vector<double>> values_bdt_modified = {fl_values_bdt_modified, s3_values_bdt_modified, s4_values_bdt_modified, s5_values_bdt_modified, afb_values_bdt_modified, s7_values_bdt_modified, s8_values_bdt_modified, s9_values_bdt_modified};
       std::vector<std::vector<double>> values_onnx_bdt = {fl_values_onnx_bdt, s3_values_onnx_bdt, s4_values_onnx_bdt, s5_values_onnx_bdt, afb_values_onnx_bdt, s7_values_onnx_bdt, s8_values_onnx_bdt, s9_values_onnx_bdt};
       std::vector<std::vector<double>> values_onnx_bdt_grad = {fl_values_onnx_bdt_grad, s3_values_onnx_bdt_grad, s4_values_onnx_bdt_grad, s5_values_onnx_bdt_grad, afb_values_onnx_bdt_grad, s7_values_onnx_bdt_grad, s8_values_onnx_bdt_grad, s9_values_onnx_bdt_grad};
       std::vector<std::vector<double>> values_onnx_direct = {fl_values_onnx_direct, s3_values_onnx_direct, s4_values_onnx_direct, s5_values_onnx_direct, afb_values_onnx_direct, s7_values_onnx_direct, s8_values_onnx_direct, s9_values_onnx_direct};
       std::vector<std::vector<double>> values_onnx_direct_grad = {fl_values_onnx_direct_grad, s3_values_onnx_direct_grad, s4_values_onnx_direct_grad, s5_values_onnx_direct_grad, afb_values_onnx_direct_grad, s7_values_onnx_direct_grad, s8_values_onnx_direct_grad, s9_values_onnx_direct_grad};
       std::vector<std::vector<double>> values_onnx_mse = {fl_values_onnx_mse, s3_values_onnx_mse, s4_values_onnx_mse, s5_values_onnx_mse, afb_values_onnx_mse, s7_values_onnx_mse, s8_values_onnx_mse, s9_values_onnx_mse};
       std::vector<std::vector<double>> values_onnx_mse_grad = {fl_values_onnx_mse_grad, s3_values_onnx_mse_grad, s4_values_onnx_mse_grad, s5_values_onnx_mse_grad, afb_values_onnx_mse_grad, s7_values_onnx_mse_grad, s8_values_onnx_mse_grad, s9_values_onnx_mse_grad};
+      std::vector<std::vector<double>> values_onnx_bce = {fl_values_onnx_bce, s3_values_onnx_bce, s4_values_onnx_bce, s5_values_onnx_bce, afb_values_onnx_bce, s7_values_onnx_bce, s8_values_onnx_bce, s9_values_onnx_bce};
+      std::vector<std::vector<double>> values_onnx_bce_grad = {fl_values_onnx_bce_grad, s3_values_onnx_bce_grad, s4_values_onnx_bce_grad, s5_values_onnx_bce_grad, afb_values_onnx_bce_grad, s7_values_onnx_bce_grad, s8_values_onnx_bce_grad, s9_values_onnx_bce_grad};
       std::vector<std::vector<double>> values_onnx_msemodified = {fl_values_onnx_msemodified, s3_values_onnx_msemodified, s4_values_onnx_msemodified, s5_values_onnx_msemodified, afb_values_onnx_msemodified, s7_values_onnx_msemodified, s8_values_onnx_msemodified, s9_values_onnx_msemodified};
       std::vector<std::vector<double>> values_onnx_msemodified_grad = {fl_values_onnx_msemodified_grad, s3_values_onnx_msemodified_grad, s4_values_onnx_msemodified_grad, s5_values_onnx_msemodified_grad, afb_values_onnx_msemodified_grad, s7_values_onnx_msemodified_grad, s8_values_onnx_msemodified_grad, s9_values_onnx_msemodified_grad};
       std::vector<std::vector<std::vector<double>>> values = {
 	values_onnx_groundtruth, values_onnx_groundtruth_grad,
 	values_onnx_efficiencytruth, values_onnx_efficiencytruth_grad,
 	values_bdt,
+	values_bdt_modified,
 	values_onnx_bdt, values_onnx_bdt_grad,
 	values_onnx_direct, values_onnx_direct_grad,
 	values_onnx_mse, values_onnx_mse_grad,
+	values_onnx_bce, values_onnx_bce_grad,
 	values_onnx_msemodified, values_onnx_msemodified_grad
       };
       print_table_mean(analytic_values, values, observables, methods);
@@ -1263,9 +1410,6 @@ int main()
       gStyle->SetTitleSize(0.06,"xyz");
       gStyle->SetLegendFont(132);
       
-      double dx = 0.1;
-      double dxdiff = 0.05;
-      unsigned int nbins = 100;
 
       TH1D* hflanalytic = new TH1D("hflanalytic", ";F_{L};#entries", nbins, genfl-dx, genfl+dx);
       TH1D* hs3analytic = new TH1D("hs3analytic", ";S_{3};#entries", nbins, gens3-dx, gens3+dx);
@@ -1330,6 +1474,24 @@ int main()
       TH1D* hs8diff_onnx_mse_grad = new TH1D("hs8diff_onnx_mse_grad", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs9diff_onnx_mse_grad = new TH1D("hs9diff_onnx_mse_grad", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
 
+      TH1D* hfldiff_onnx_bce = new TH1D("hfldiff_onnx_bce", ";F_{L} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_onnx_bce = new TH1D("hs3diff_onnx_bce", ";S_{3} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_onnx_bce = new TH1D("hs4diff_onnx_bce", ";S_{4} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_onnx_bce = new TH1D("hs5diff_onnx_bce", ";S_{5} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_onnx_bce = new TH1D("hafbdiff_onnx_bce", ";A_{FB} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_onnx_bce = new TH1D("hs7diff_onnx_bce", ";S_{7} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_onnx_bce = new TH1D("hs8diff_onnx_bce", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_onnx_bce = new TH1D("hs9diff_onnx_bce", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+      TH1D* hfldiff_onnx_bce_grad = new TH1D("hfldiff_onnx_bce_grad", ";F_{L} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_onnx_bce_grad = new TH1D("hs3diff_onnx_bce_grad", ";S_{3} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_onnx_bce_grad = new TH1D("hs4diff_onnx_bce_grad", ";S_{4} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_onnx_bce_grad = new TH1D("hs5diff_onnx_bce_grad", ";S_{5} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_onnx_bce_grad = new TH1D("hafbdiff_onnx_bce_grad", ";A_{FB} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_onnx_bce_grad = new TH1D("hs7diff_onnx_bce_grad", ";S_{7} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_onnx_bce_grad = new TH1D("hs8diff_onnx_bce_grad", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_onnx_bce_grad = new TH1D("hs9diff_onnx_bce_grad", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
       TH1D* hfldiff_onnx_msemodified = new TH1D("hfldiff_onnx_msemodified", ";F_{L} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs3diff_onnx_msemodified = new TH1D("hs3diff_onnx_msemodified", ";S_{3} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs4diff_onnx_msemodified = new TH1D("hs4diff_onnx_msemodified", ";S_{4} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
@@ -1393,6 +1555,15 @@ int main()
       TH1D* hs7diff_bdt = new TH1D("hs7diff_bdt", ";S_{7} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs8diff_bdt = new TH1D("hs8diff_bdt", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs9diff_bdt = new TH1D("hs9diff_bdt", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+      TH1D* hfldiff_bdt_modified = new TH1D("hfldiff_bdt_modified", ";F_{L} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_bdt_modified = new TH1D("hs3diff_bdt_modified", ";S_{3} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_bdt_modified = new TH1D("hs4diff_bdt_modified", ";S_{4} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_bdt_modified = new TH1D("hs5diff_bdt_modified", ";S_{5} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_bdt_modified = new TH1D("hafbdiff_bdt_modified", ";A_{FB} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_bdt_modified = new TH1D("hs7diff_bdt_modified", ";S_{7} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_bdt_modified = new TH1D("hs8diff_bdt_modified", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_bdt_modified = new TH1D("hs9diff_bdt_modified", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
 
 
       for (unsigned int i=0; i<nruns*nmodels; i++)
@@ -1460,6 +1631,24 @@ int main()
 	  hs8diff_onnx_mse_grad->Fill(s8_values_onnx_mse_grad.at(i)-s8_values_analytic.at(i));
 	  hs9diff_onnx_mse_grad->Fill(s9_values_onnx_mse_grad.at(i)-s9_values_analytic.at(i));	  
 
+	  hfldiff_onnx_bce->Fill(fl_values_onnx_bce.at(i)-fl_values_analytic.at(i));
+	  hs3diff_onnx_bce->Fill(s3_values_onnx_bce.at(i)-s3_values_analytic.at(i));
+	  hs4diff_onnx_bce->Fill(s4_values_onnx_bce.at(i)-s4_values_analytic.at(i));
+	  hs5diff_onnx_bce->Fill(s5_values_onnx_bce.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_onnx_bce->Fill(afb_values_onnx_bce.at(i)-afb_values_analytic.at(i));
+	  hs7diff_onnx_bce->Fill(s7_values_onnx_bce.at(i)-s7_values_analytic.at(i));
+	  hs8diff_onnx_bce->Fill(s8_values_onnx_bce.at(i)-s8_values_analytic.at(i));
+	  hs9diff_onnx_bce->Fill(s9_values_onnx_bce.at(i)-s9_values_analytic.at(i));
+	  
+	  hfldiff_onnx_bce_grad->Fill(fl_values_onnx_bce_grad.at(i)-fl_values_analytic.at(i));
+	  hs3diff_onnx_bce_grad->Fill(s3_values_onnx_bce_grad.at(i)-s3_values_analytic.at(i));
+	  hs4diff_onnx_bce_grad->Fill(s4_values_onnx_bce_grad.at(i)-s4_values_analytic.at(i));
+	  hs5diff_onnx_bce_grad->Fill(s5_values_onnx_bce_grad.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_onnx_bce_grad->Fill(afb_values_onnx_bce_grad.at(i)-afb_values_analytic.at(i));
+	  hs7diff_onnx_bce_grad->Fill(s7_values_onnx_bce_grad.at(i)-s7_values_analytic.at(i));
+	  hs8diff_onnx_bce_grad->Fill(s8_values_onnx_bce_grad.at(i)-s8_values_analytic.at(i));
+	  hs9diff_onnx_bce_grad->Fill(s9_values_onnx_bce_grad.at(i)-s9_values_analytic.at(i));	  
+
 	  hfldiff_onnx_msemodified->Fill(fl_values_onnx_msemodified.at(i)-fl_values_analytic.at(i));
 	  hs3diff_onnx_msemodified->Fill(s3_values_onnx_msemodified.at(i)-s3_values_analytic.at(i));
 	  hs4diff_onnx_msemodified->Fill(s4_values_onnx_msemodified.at(i)-s4_values_analytic.at(i));
@@ -1522,6 +1711,15 @@ int main()
 	  hs7diff_bdt->Fill(s7_values_bdt.at(i)-s7_values_analytic.at(i));
 	  hs8diff_bdt->Fill(s8_values_bdt.at(i)-s8_values_analytic.at(i));
 	  hs9diff_bdt->Fill(s9_values_bdt.at(i)-s9_values_analytic.at(i));
+	  
+	  hfldiff_bdt_modified->Fill(fl_values_bdt_modified.at(i)-fl_values_analytic.at(i));
+	  hs3diff_bdt_modified->Fill(s3_values_bdt_modified.at(i)-s3_values_analytic.at(i));
+	  hs4diff_bdt_modified->Fill(s4_values_bdt_modified.at(i)-s4_values_analytic.at(i));
+	  hs5diff_bdt_modified->Fill(s5_values_bdt_modified.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_bdt_modified->Fill(afb_values_bdt_modified.at(i)-afb_values_analytic.at(i));
+	  hs7diff_bdt_modified->Fill(s7_values_bdt_modified.at(i)-s7_values_analytic.at(i));
+	  hs8diff_bdt_modified->Fill(s8_values_bdt_modified.at(i)-s8_values_analytic.at(i));
+	  hs9diff_bdt_modified->Fill(s9_values_bdt_modified.at(i)-s9_values_analytic.at(i));
 	}
 
       TCanvas* c0_ = new TCanvas("c0", "c0", 3*800, 3*600);
@@ -1559,20 +1757,20 @@ int main()
       c1_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
 
       TLegend* leg = new TLegend(0.6, 0.5, 0.95, 0.95);
-      //leg->AddEntry(hc1analytic,"analytic truth","l");
-      leg->AddEntry(hfldiff_bdt,"BDT modeling #epsilon","l");
+      leg->AddEntry(hfldiff_bdt,"BDT modeling #epsilon, MSE","l");
+      leg->AddEntry(hfldiff_bdt_modified,"BDT modeling #epsilon, modified MSE","l");
       leg->AddEntry(hfldiff_onnx_groundtruth,"ONNX groundtruth","l");
       leg->AddEntry(hfldiff_onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
-      leg->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX efficiencytruth","l");
-      leg->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
+      leg->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX #epsilon truth","l");
+      leg->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX #epsilon truth grad.","l");
       leg->AddEntry(hfldiff_onnx_direct,"ONNX direct","l");
       leg->AddEntry(hfldiff_onnx_direct_grad,"ONNX direct grad.","l");
-      leg->AddEntry(hfldiff_onnx_mse,"ONNX mse","l");
-      leg->AddEntry(hfldiff_onnx_mse_grad,"ONNX mse grad.","l");
-      leg->AddEntry(hfldiff_onnx_msemodified,"ONNX msemodified","l");
-      leg->AddEntry(hfldiff_onnx_msemodified_grad,"ONNX msemodified grad.","l");
-      //leg->AddEntry(hfldiff_onnx_bdt,"ONNX bdt","l");
-      //leg->AddEntry(hfldiff_onnx_bdt_grad,"ONNX bdt grad.","l");
+      leg->AddEntry(hfldiff_onnx_mse,"ONNX MSE","l");
+      leg->AddEntry(hfldiff_onnx_mse_grad,"ONNX MSE grad.","l");
+      leg->AddEntry(hfldiff_onnx_bce,"ONNX BCE","l");
+      leg->AddEntry(hfldiff_onnx_bce_grad,"ONNX BCE grad.","l");
+      leg->AddEntry(hfldiff_onnx_msemodified,"ONNX modified MSE","l");
+      leg->AddEntry(hfldiff_onnx_msemodified_grad,"ONNX modified MSE grad.","l");
       
       hfldiff_onnx_groundtruth->SetLineWidth(1.0);
       hfldiff_onnx_groundtruth->SetLineColor(2);
@@ -1580,9 +1778,9 @@ int main()
       hfldiff_onnx_groundtruth_grad->SetLineColor(2);
       hfldiff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hfldiff_onnx_direct->SetLineWidth(1.0);
-      hfldiff_onnx_direct->SetLineColor(kYellow+2);
+      hfldiff_onnx_direct->SetLineColor(kCyan);
       hfldiff_onnx_direct_grad->SetLineWidth(1.0);
-      hfldiff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hfldiff_onnx_direct_grad->SetLineColor(kCyan);
       hfldiff_onnx_direct_grad->SetLineStyle(kDashed);
       hfldiff_onnx_mse->SetLineWidth(1.0);
       hfldiff_onnx_mse->SetLineColor(4);
@@ -1600,12 +1798,19 @@ int main()
       hfldiff_onnx_bdt_grad->SetLineColor(kMagenta);
       hfldiff_onnx_bdt_grad->SetLineStyle(kDashed);
       hfldiff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hfldiff_onnx_efficiencytruth->SetLineColor(7);
+      hfldiff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hfldiff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hfldiff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hfldiff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hfldiff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);  
       hfldiff_bdt->SetLineWidth(1.0);
       hfldiff_bdt->SetLineColor(kGreen+2);
+      hfldiff_bdt_modified->SetLineWidth(1.0);
+      hfldiff_bdt_modified->SetLineColor(kMagenta);
+      hfldiff_onnx_bce->SetLineWidth(1.0);
+      hfldiff_onnx_bce->SetLineColor(kViolet+1);
+      hfldiff_onnx_bce_grad->SetLineWidth(1.0);
+      hfldiff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hfldiff_onnx_bce_grad->SetLineStyle(kDashed);      
       
       hfldiff_onnx_groundtruth_grad->SetMaximum(hfldiff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hfldiff_onnx_groundtruth_grad->Draw("hist");
@@ -1613,17 +1818,18 @@ int main()
       hfldiff_onnx_efficiencytruth->Draw("histsame");
       hfldiff_onnx_efficiencytruth_grad->Draw("histsame");
       hfldiff_bdt->Draw("histsame");      
+      hfldiff_bdt_modified->Draw("histsame");      
       hfldiff_onnx_direct->Draw("histsame");
       hfldiff_onnx_direct_grad->Draw("histsame");
       hfldiff_onnx_mse->Draw("histsame");
       hfldiff_onnx_mse_grad->Draw("histsame");
+      hfldiff_onnx_bce->Draw("histsame");
+      hfldiff_onnx_bce_grad->Draw("histsame");
       hfldiff_onnx_msemodified->Draw("histsame");
       hfldiff_onnx_msemodified_grad->Draw("histsame");
-      //hfldiff_onnx_bdt->Draw("histsame");
-      //hfldiff_onnx_bdt_grad->Draw("histsame");
       leg->Draw();
-      c1_->cd(1)->Print("diffs_kstarmumu_fl.eps", "eps");
-      c1_->cd(1)->Print("diffs_kstarmumu_fl.root", "root");
+      c1_->cd(1)->Print("diffs_kstarmumu_fl_full.eps", "eps");
+      c1_->cd(1)->Print("diffs_kstarmumu_fl_full.root", "root");
 
       c1_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs3diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1632,9 +1838,9 @@ int main()
       hs3diff_onnx_groundtruth_grad->SetLineColor(2);
       hs3diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs3diff_onnx_direct->SetLineWidth(1.0);
-      hs3diff_onnx_direct->SetLineColor(kYellow+2);
+      hs3diff_onnx_direct->SetLineColor(kCyan);
       hs3diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs3diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs3diff_onnx_direct_grad->SetLineColor(kCyan);
       hs3diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs3diff_onnx_mse->SetLineWidth(1.0);
       hs3diff_onnx_mse->SetLineColor(4);
@@ -1652,29 +1858,37 @@ int main()
       hs3diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs3diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs3diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs3diff_onnx_efficiencytruth->SetLineColor(7);
+      hs3diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs3diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs3diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs3diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs3diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs3diff_bdt->SetLineWidth(1.0);
       hs3diff_bdt->SetLineColor(kGreen+2);
-
+      hs3diff_bdt_modified->SetLineWidth(1.0);
+      hs3diff_bdt_modified->SetLineColor(kMagenta);
+      hs3diff_onnx_bce->SetLineWidth(1.0);
+      hs3diff_onnx_bce->SetLineColor(kViolet+1);
+      hs3diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs3diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs3diff_onnx_bce_grad->SetLineStyle(kDashed);
+      
       hs3diff_onnx_groundtruth_grad->SetMaximum(hs3diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs3diff_onnx_groundtruth_grad->Draw("hist");
       hs3diff_onnx_groundtruth->Draw("histsame");
       hs3diff_onnx_efficiencytruth->Draw("histsame");
       hs3diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs3diff_bdt->Draw("histsame");
+      hs3diff_bdt_modified->Draw("histsame");
       hs3diff_onnx_direct->Draw("histsame");
       hs3diff_onnx_direct_grad->Draw("histsame");
       hs3diff_onnx_mse->Draw("histsame");
       hs3diff_onnx_mse_grad->Draw("histsame");
+      hs3diff_onnx_bce->Draw("histsame");
+      hs3diff_onnx_bce_grad->Draw("histsame");
       hs3diff_onnx_msemodified->Draw("histsame");
       hs3diff_onnx_msemodified_grad->Draw("histsame");
-      //hs3diff_onnx_bdt->Draw("histsame");
-      //hs3diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(2)->Print("diffs_kstarmumu_s3.eps", "eps");
-      c1_->cd(2)->Print("diffs_kstarmumu_s3.root", "root");
+      c1_->cd(2)->Print("diffs_kstarmumu_s3_full.eps", "eps");
+      c1_->cd(2)->Print("diffs_kstarmumu_s3_full.root", "root");
       
       c1_->cd(3)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs4diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1683,9 +1897,9 @@ int main()
       hs4diff_onnx_groundtruth_grad->SetLineColor(2);
       hs4diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs4diff_onnx_direct->SetLineWidth(1.0);
-      hs4diff_onnx_direct->SetLineColor(kYellow+2);
+      hs4diff_onnx_direct->SetLineColor(kCyan);
       hs4diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs4diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs4diff_onnx_direct_grad->SetLineColor(kCyan);
       hs4diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs4diff_onnx_mse->SetLineWidth(1.0);
       hs4diff_onnx_mse->SetLineColor(4);
@@ -1703,12 +1917,19 @@ int main()
       hs4diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs4diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs4diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs4diff_onnx_efficiencytruth->SetLineColor(7);
+      hs4diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs4diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs4diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs4diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs4diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs4diff_bdt->SetLineWidth(1.0);
       hs4diff_bdt->SetLineColor(kGreen+2);
+      hs4diff_bdt_modified->SetLineWidth(1.0);
+      hs4diff_bdt_modified->SetLineColor(kMagenta);
+      hs4diff_onnx_bce->SetLineWidth(1.0);
+      hs4diff_onnx_bce->SetLineColor(kViolet+1);
+      hs4diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs4diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs4diff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hs4diff_onnx_groundtruth_grad->SetMaximum(hs4diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs4diff_onnx_groundtruth_grad->Draw("hist");
@@ -1716,16 +1937,17 @@ int main()
       hs4diff_onnx_efficiencytruth->Draw("histsame");
       hs4diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs4diff_bdt->Draw("histsame");
+      hs4diff_bdt_modified->Draw("histsame");
       hs4diff_onnx_direct->Draw("histsame");
       hs4diff_onnx_direct_grad->Draw("histsame");
       hs4diff_onnx_mse->Draw("histsame");
       hs4diff_onnx_mse_grad->Draw("histsame");
+      hs4diff_onnx_bce->Draw("histsame");
+      hs4diff_onnx_bce_grad->Draw("histsame");
       hs4diff_onnx_msemodified->Draw("histsame");
       hs4diff_onnx_msemodified_grad->Draw("histsame");
-      //hs4diff_onnx_bdt->Draw("histsame");
-      //hs4diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(3)->Print("diffs_kstarmumu_s4.eps", "eps");
-      c1_->cd(3)->Print("diffs_kstarmumu_s4.root", "root");
+      c1_->cd(3)->Print("diffs_kstarmumu_s4_full.eps", "eps");
+      c1_->cd(3)->Print("diffs_kstarmumu_s4_full.root", "root");
 
       c1_->cd(4)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs5diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1734,9 +1956,9 @@ int main()
       hs5diff_onnx_groundtruth_grad->SetLineColor(2);
       hs5diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs5diff_onnx_direct->SetLineWidth(1.0);
-      hs5diff_onnx_direct->SetLineColor(kYellow+2);
+      hs5diff_onnx_direct->SetLineColor(kCyan);
       hs5diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs5diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs5diff_onnx_direct_grad->SetLineColor(kCyan);
       hs5diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs5diff_onnx_mse->SetLineWidth(1.0);
       hs5diff_onnx_mse->SetLineColor(4);
@@ -1754,12 +1976,19 @@ int main()
       hs5diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs5diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs5diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs5diff_onnx_efficiencytruth->SetLineColor(7);
+      hs5diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs5diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs5diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs5diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs5diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs5diff_bdt->SetLineWidth(1.0);
       hs5diff_bdt->SetLineColor(kGreen+2);
+      hs5diff_bdt_modified->SetLineWidth(1.0);
+      hs5diff_bdt_modified->SetLineColor(kMagenta);
+      hs5diff_onnx_bce->SetLineWidth(1.0);
+      hs5diff_onnx_bce->SetLineColor(kViolet+1);
+      hs5diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs5diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs5diff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hs5diff_onnx_groundtruth_grad->SetMaximum(hs5diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs5diff_onnx_groundtruth_grad->Draw("hist");
@@ -1767,16 +1996,17 @@ int main()
       hs5diff_onnx_efficiencytruth->Draw("histsame");
       hs5diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs5diff_bdt->Draw("histsame");
+      hs5diff_bdt_modified->Draw("histsame");
       hs5diff_onnx_direct->Draw("histsame");
       hs5diff_onnx_direct_grad->Draw("histsame");
       hs5diff_onnx_mse->Draw("histsame");
       hs5diff_onnx_mse_grad->Draw("histsame");
+      hs5diff_onnx_bce->Draw("histsame");
+      hs5diff_onnx_bce_grad->Draw("histsame");
       hs5diff_onnx_msemodified->Draw("histsame");
       hs5diff_onnx_msemodified_grad->Draw("histsame");
-      //hs5diff_onnx_bdt->Draw("histsame");
-      //hs5diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(4)->Print("diffs_kstarmumu_s5.eps", "eps");
-      c1_->cd(4)->Print("diffs_kstarmumu_s5.root", "root");
+      c1_->cd(4)->Print("diffs_kstarmumu_s5_full.eps", "eps");
+      c1_->cd(4)->Print("diffs_kstarmumu_s5_full.root", "root");
       
       c1_->cd(5)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hafbdiff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1785,9 +2015,9 @@ int main()
       hafbdiff_onnx_groundtruth_grad->SetLineColor(2);
       hafbdiff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hafbdiff_onnx_direct->SetLineWidth(1.0);
-      hafbdiff_onnx_direct->SetLineColor(kYellow+2);
+      hafbdiff_onnx_direct->SetLineColor(kCyan);
       hafbdiff_onnx_direct_grad->SetLineWidth(1.0);
-      hafbdiff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hafbdiff_onnx_direct_grad->SetLineColor(kCyan);
       hafbdiff_onnx_direct_grad->SetLineStyle(kDashed);
       hafbdiff_onnx_mse->SetLineWidth(1.0);
       hafbdiff_onnx_mse->SetLineColor(4);
@@ -1805,12 +2035,19 @@ int main()
       hafbdiff_onnx_bdt_grad->SetLineColor(kMagenta);
       hafbdiff_onnx_bdt_grad->SetLineStyle(kDashed);
       hafbdiff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hafbdiff_onnx_efficiencytruth->SetLineColor(7);
+      hafbdiff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hafbdiff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hafbdiff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hafbdiff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hafbdiff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hafbdiff_bdt->SetLineWidth(1.0);
       hafbdiff_bdt->SetLineColor(kGreen+2);
+      hafbdiff_bdt_modified->SetLineWidth(1.0);
+      hafbdiff_bdt_modified->SetLineColor(kMagenta);
+      hafbdiff_onnx_bce->SetLineWidth(1.0);
+      hafbdiff_onnx_bce->SetLineColor(kViolet+1);
+      hafbdiff_onnx_bce_grad->SetLineWidth(1.0);
+      hafbdiff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hafbdiff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hafbdiff_onnx_groundtruth_grad->SetMaximum(hafbdiff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hafbdiff_onnx_groundtruth_grad->Draw("hist");
@@ -1818,17 +2055,18 @@ int main()
       hafbdiff_onnx_efficiencytruth->Draw("histsame");
       hafbdiff_onnx_efficiencytruth_grad->Draw("histsame");
       hafbdiff_bdt->Draw("histsame");
+      hafbdiff_bdt_modified->Draw("histsame");
       hafbdiff_onnx_direct->Draw("histsame");
       hafbdiff_onnx_direct_grad->Draw("histsame");
       hafbdiff_onnx_mse->Draw("histsame");
       hafbdiff_onnx_mse_grad->Draw("histsame");
+      hafbdiff_onnx_bce->Draw("histsame");
+      hafbdiff_onnx_bce_grad->Draw("histsame");
       hafbdiff_onnx_msemodified->Draw("histsame");
       hafbdiff_onnx_msemodified_grad->Draw("histsame");
-      //hafbdiff_onnx_bdt->Draw("histsame");
-      //hafbdiff_onnx_bdt_grad->Draw("histsame");
       leg->Draw();
-      c1_->cd(5)->Print("diffs_kstarmumu_afb.eps", "eps");
-      c1_->cd(5)->Print("diffs_kstarmumu_afb.root", "root");
+      c1_->cd(5)->Print("diffs_kstarmumu_afb_full.eps", "eps");
+      c1_->cd(5)->Print("diffs_kstarmumu_afb_full.root", "root");
       
       c1_->cd(6)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs7diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1837,9 +2075,9 @@ int main()
       hs7diff_onnx_groundtruth_grad->SetLineColor(2);
       hs7diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs7diff_onnx_direct->SetLineWidth(1.0);
-      hs7diff_onnx_direct->SetLineColor(kYellow+2);
+      hs7diff_onnx_direct->SetLineColor(kCyan);
       hs7diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs7diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs7diff_onnx_direct_grad->SetLineColor(kCyan);
       hs7diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs7diff_onnx_mse->SetLineWidth(1.0);
       hs7diff_onnx_mse->SetLineColor(4);
@@ -1857,12 +2095,19 @@ int main()
       hs7diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs7diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs7diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs7diff_onnx_efficiencytruth->SetLineColor(7);
+      hs7diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs7diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs7diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs7diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs7diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs7diff_bdt->SetLineWidth(1.0);
       hs7diff_bdt->SetLineColor(kGreen+2);
+      hs7diff_bdt_modified->SetLineWidth(1.0);
+      hs7diff_bdt_modified->SetLineColor(kMagenta);
+      hs7diff_onnx_bce->SetLineWidth(1.0);
+      hs7diff_onnx_bce->SetLineColor(kViolet+1);
+      hs7diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs7diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs7diff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hs7diff_onnx_groundtruth_grad->SetMaximum(hs7diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs7diff_onnx_groundtruth_grad->Draw("hist");
@@ -1870,16 +2115,17 @@ int main()
       hs7diff_onnx_efficiencytruth->Draw("histsame");
       hs7diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs7diff_bdt->Draw("histsame");
+      hs7diff_bdt_modified->Draw("histsame");
       hs7diff_onnx_direct->Draw("histsame");
       hs7diff_onnx_direct_grad->Draw("histsame");
       hs7diff_onnx_mse->Draw("histsame");
       hs7diff_onnx_mse_grad->Draw("histsame");
+      hs7diff_onnx_bce->Draw("histsame");
+      hs7diff_onnx_bce_grad->Draw("histsame");
       hs7diff_onnx_msemodified->Draw("histsame");
       hs7diff_onnx_msemodified_grad->Draw("histsame");
-      //hs7diff_onnx_bdt->Draw("histsame");
-      //hs7diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(6)->Print("diffs_kstarmumu_s7.eps", "eps");
-      c1_->cd(6)->Print("diffs_kstarmumu_s7.root", "root");
+      c1_->cd(6)->Print("diffs_kstarmumu_s7_full.eps", "eps");
+      c1_->cd(6)->Print("diffs_kstarmumu_s7_full.root", "root");
       
       c1_->cd(7)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs8diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1888,9 +2134,9 @@ int main()
       hs8diff_onnx_groundtruth_grad->SetLineColor(2);
       hs8diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs8diff_onnx_direct->SetLineWidth(1.0);
-      hs8diff_onnx_direct->SetLineColor(kYellow+2);
+      hs8diff_onnx_direct->SetLineColor(kCyan);
       hs8diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs8diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs8diff_onnx_direct_grad->SetLineColor(kCyan);
       hs8diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs8diff_onnx_mse->SetLineWidth(1.0);
       hs8diff_onnx_mse->SetLineColor(4);
@@ -1908,12 +2154,19 @@ int main()
       hs8diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs8diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs8diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs8diff_onnx_efficiencytruth->SetLineColor(7);
+      hs8diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs8diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs8diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs8diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs8diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs8diff_bdt->SetLineWidth(1.0);
       hs8diff_bdt->SetLineColor(kGreen+2);
+      hs8diff_bdt_modified->SetLineWidth(1.0);
+      hs8diff_bdt_modified->SetLineColor(kMagenta);
+      hs8diff_onnx_bce->SetLineWidth(1.0);
+      hs8diff_onnx_bce->SetLineColor(kViolet+1);
+      hs8diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs8diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs8diff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hs8diff_onnx_groundtruth_grad->SetMaximum(hs8diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs8diff_onnx_groundtruth_grad->Draw("hist");
@@ -1921,16 +2174,17 @@ int main()
       hs8diff_onnx_efficiencytruth->Draw("histsame");
       hs8diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs8diff_bdt->Draw("histsame");
+      hs8diff_bdt_modified->Draw("histsame");
       hs8diff_onnx_direct->Draw("histsame");
       hs8diff_onnx_direct_grad->Draw("histsame");
       hs8diff_onnx_mse->Draw("histsame");
       hs8diff_onnx_mse_grad->Draw("histsame");
+      hs8diff_onnx_bce->Draw("histsame");
+      hs8diff_onnx_bce_grad->Draw("histsame");
       hs8diff_onnx_msemodified->Draw("histsame");
       hs8diff_onnx_msemodified_grad->Draw("histsame");
-      //hs8diff_onnx_bdt->Draw("histsame");
-      //hs8diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(7)->Print("diffs_kstarmumu_s8.eps", "eps");
-      c1_->cd(7)->Print("diffs_kstarmumu_s8.root", "root");
+      c1_->cd(7)->Print("diffs_kstarmumu_s8_full.eps", "eps");
+      c1_->cd(7)->Print("diffs_kstarmumu_s8_full.root", "root");
 
       c1_->cd(8)->SetMargin(0.125, 0.05, 0.125, 0.05);
       hs9diff_onnx_groundtruth->SetLineWidth(1.0);
@@ -1939,9 +2193,9 @@ int main()
       hs9diff_onnx_groundtruth_grad->SetLineColor(2);
       hs9diff_onnx_groundtruth_grad->SetLineStyle(kDashed);
       hs9diff_onnx_direct->SetLineWidth(1.0);
-      hs9diff_onnx_direct->SetLineColor(kYellow+2);
+      hs9diff_onnx_direct->SetLineColor(kCyan);
       hs9diff_onnx_direct_grad->SetLineWidth(1.0);
-      hs9diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hs9diff_onnx_direct_grad->SetLineColor(kCyan);
       hs9diff_onnx_direct_grad->SetLineStyle(kDashed);
       hs9diff_onnx_mse->SetLineWidth(1.0);
       hs9diff_onnx_mse->SetLineColor(4);
@@ -1959,12 +2213,19 @@ int main()
       hs9diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hs9diff_onnx_bdt_grad->SetLineStyle(kDashed);
       hs9diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hs9diff_onnx_efficiencytruth->SetLineColor(7);
+      hs9diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hs9diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hs9diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hs9diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hs9diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);
       hs9diff_bdt->SetLineWidth(1.0);
       hs9diff_bdt->SetLineColor(kGreen+2);
+      hs9diff_bdt_modified->SetLineWidth(1.0);
+      hs9diff_bdt_modified->SetLineColor(kMagenta);
+      hs9diff_onnx_bce->SetLineWidth(1.0);
+      hs9diff_onnx_bce->SetLineColor(kViolet+1);
+      hs9diff_onnx_bce_grad->SetLineWidth(1.0);
+      hs9diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hs9diff_onnx_bce_grad->SetLineStyle(kDashed);
 
       hs9diff_onnx_groundtruth_grad->SetMaximum(hs9diff_onnx_groundtruth_grad->GetMaximum()*1.25);
       hs9diff_onnx_groundtruth_grad->Draw("hist");
@@ -1972,42 +2233,269 @@ int main()
       hs9diff_onnx_efficiencytruth->Draw("histsame");
       hs9diff_onnx_efficiencytruth_grad->Draw("histsame");
       hs9diff_bdt->Draw("histsame");
+      hs9diff_bdt_modified->Draw("histsame");
       hs9diff_onnx_direct->Draw("histsame");
       hs9diff_onnx_direct_grad->Draw("histsame");
       hs9diff_onnx_mse->Draw("histsame");
       hs9diff_onnx_mse_grad->Draw("histsame");
+      hs9diff_onnx_bce->Draw("histsame");
+      hs9diff_onnx_bce_grad->Draw("histsame");
       hs9diff_onnx_msemodified->Draw("histsame");
       hs9diff_onnx_msemodified_grad->Draw("histsame");
-      //hs9diff_onnx_bdt->Draw("histsame");
-      //hs9diff_onnx_bdt_grad->Draw("histsame");
-      c1_->cd(8)->Print("diffs_kstarmumu_s9.eps", "eps");
-      c1_->cd(8)->Print("diffs_kstarmumu_s9.root", "root");
+      c1_->cd(8)->Print("diffs_kstarmumu_s9_full.eps", "eps");
+      c1_->cd(8)->Print("diffs_kstarmumu_s9_full.root", "root");
       
       c1_->cd(9)->SetMargin(0.125, 0.05, 0.125, 0.05);
-      /*
-      TLegend* leg2 = new TLegend(0.15, 0.15, 0.95, 0.95);
-      //leg2->AddEntry(hc1analytic,"analytic truth","l");
-      leg2->AddEntry(hfldiff_bdt,"BDT modeling #epsilon","l");
-      leg2->AddEntry(hfldiff_onnx_groundtruth,"ONNX groundtruth","l");
-      leg2->AddEntry(hfldiff_onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
-      leg2->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX efficiencytruth","l");
-      leg2->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
-      leg2->AddEntry(hfldiff_onnx_direct,"ONNX direct","l");
-      leg2->AddEntry(hfldiff_onnx_direct_grad,"ONNX direct grad.","l");
-      leg2->AddEntry(hfldiff_onnx_mse,"ONNX mse","l");
-      leg2->AddEntry(hfldiff_onnx_mse_grad,"ONNX mse grad.","l");
-      leg2->AddEntry(hfldiff_onnx_msemodified,"ONNX msemodified","l");
-      leg2->AddEntry(hfldiff_onnx_msemodified_grad,"ONNX msemodified grad.","l");
-      //leg2->AddEntry(hfldiff_onnx_bdt,"ONNX bdt","l");
-      //leg2->AddEntry(hfldiff_onnx_bdt_grad,"ONNX bdt grad.","l");
-      leg2->Draw();
-      */
       leg->Draw();
-      c1_->cd(9)->Print("diffs_kstarmumu_legend.eps", "eps");
-      c1_->cd(9)->Print("diffs_kstarmumu_legend.root", "root");
+      c1_->cd(9)->Print("diffs_kstarmumu_legend_full.eps", "eps");
+      c1_->cd(9)->Print("diffs_kstarmumu_legend_full.root", "root");
 
-      c1_->Print("diffs_kstarmumu.eps", "eps");
-      c1_->Print("diffs_kstarmumu.root", "root");
+      c1_->Print("diffs_kstarmumu_full.eps", "eps");
+      c1_->Print("diffs_kstarmumu_full.root", "root");
+
+
+      hfldiff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hfldiff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hfldiff_onnx_direct_grad->SetLineStyle(kSolid);
+      hfldiff_onnx_mse_grad->SetLineStyle(kSolid);
+      hfldiff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hfldiff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hfldiff_onnx_bce_grad->SetLineStyle(kSolid);
+      
+      hs3diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs3diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs3diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs3diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs3diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs3diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs3diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hs4diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs4diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs4diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs4diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs4diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs4diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs4diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hs5diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs5diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs5diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs5diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs5diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs5diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs5diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hafbdiff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hafbdiff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hafbdiff_onnx_direct_grad->SetLineStyle(kSolid);
+      hafbdiff_onnx_mse_grad->SetLineStyle(kSolid);
+      hafbdiff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hafbdiff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hafbdiff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hs7diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs7diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs7diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs7diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs7diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs7diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs7diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hs8diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs8diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs8diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs8diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs8diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs8diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs8diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      hs9diff_onnx_groundtruth_grad->SetLineStyle(kSolid);
+      hs9diff_onnx_efficiencytruth_grad->SetLineStyle(kSolid);  
+      hs9diff_onnx_direct_grad->SetLineStyle(kSolid);
+      hs9diff_onnx_mse_grad->SetLineStyle(kSolid);
+      hs9diff_onnx_msemodified_grad->SetLineStyle(kSolid);
+      hs9diff_onnx_bdt_grad->SetLineStyle(kSolid);
+      hs9diff_onnx_bce_grad->SetLineStyle(kSolid);      
+
+      
+      //plotting subset
+      TCanvas* c2_ = new TCanvas("c2", "c2", 3*800, 3*600);
+      c2_->Divide(3,3);
+      c2_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
+
+      TLegend* leg2 = new TLegend(0.6, 0.5, 0.95, 0.95);
+      //leg2->AddEntry(hfldiff_onnx_groundtruth,"ONNX groundtruth","l");
+      leg2->AddEntry(hfldiff_onnx_groundtruth_grad,"i) ONNX groundtruth grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_efficiencytruth,"ONNX #epsilon truth","l");
+      //leg2->AddEntry(hfldiff_onnx_efficiencytruth_grad,"ONNX #epsilon truth grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_direct,"ONNX direct","l");
+      leg2->AddEntry(hfldiff_onnx_direct_grad,"iii) ONNX direct grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_mse,"ONNX MSE","l");
+      leg2->AddEntry(hfldiff_onnx_mse_grad,"iv) ONNX MSE grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_bce,"ONNX BCE","l");
+      leg2->AddEntry(hfldiff_onnx_bce_grad,"v) ONNX BCE grad.","l");
+      //leg2->AddEntry(hfldiff_onnx_msemodified,"ONNX modified MSE","l");
+      leg2->AddEntry(hfldiff_onnx_msemodified_grad,"vi) ONNX modified MSE grad.","l");
+      leg2->AddEntry(hfldiff_bdt,"vii) BDT modeling #epsilon, MSE","l");
+      leg2->AddEntry(hfldiff_bdt_modified,"viii) BDT modeling #epsilon, modified MSE","l");
+      
+      
+      hfldiff_onnx_groundtruth_grad->Draw("hist");
+      //hfldiff_onnx_groundtruth->Draw("histsame");
+      //hfldiff_onnx_efficiencytruth->Draw("histsame");
+      //hfldiff_onnx_efficiencytruth_grad->Draw("histsame");
+      hfldiff_bdt->Draw("histsame");      
+      hfldiff_bdt_modified->Draw("histsame");      
+      //hfldiff_onnx_direct->Draw("histsame");
+      hfldiff_onnx_direct_grad->Draw("histsame");
+      //hfldiff_onnx_mse->Draw("histsame");
+      hfldiff_onnx_mse_grad->Draw("histsame");
+      //hfldiff_onnx_bce->Draw("histsame");
+      hfldiff_onnx_bce_grad->Draw("histsame");
+      //hfldiff_onnx_msemodified->Draw("histsame");
+      hfldiff_onnx_msemodified_grad->Draw("histsame");
+      leg2->Draw();
+      c2_->cd(1)->Print("diffs_kstarmumu_fl.eps", "eps");
+      c2_->cd(1)->Print("diffs_kstarmumu_fl.root", "root");
+
+      c2_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      
+      hs3diff_onnx_groundtruth_grad->Draw("hist");
+      //hs3diff_onnx_groundtruth->Draw("histsame");
+      //hs3diff_onnx_efficiencytruth->Draw("histsame");
+      //hs3diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs3diff_bdt->Draw("histsame");
+      hs3diff_bdt_modified->Draw("histsame");
+      //hs3diff_onnx_direct->Draw("histsame");
+      hs3diff_onnx_direct_grad->Draw("histsame");
+      //hs3diff_onnx_mse->Draw("histsame");
+      hs3diff_onnx_mse_grad->Draw("histsame");
+      //hs3diff_onnx_bce->Draw("histsame");
+      hs3diff_onnx_bce_grad->Draw("histsame");
+      //hs3diff_onnx_msemodified->Draw("histsame");
+      hs3diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(2)->Print("diffs_kstarmumu_s3.eps", "eps");
+      c2_->cd(2)->Print("diffs_kstarmumu_s3.root", "root");
+      
+      c2_->cd(3)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hs4diff_onnx_groundtruth_grad->Draw("hist");
+      //hs4diff_onnx_groundtruth->Draw("histsame");
+      //hs4diff_onnx_efficiencytruth->Draw("histsame");
+      //hs4diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs4diff_bdt->Draw("histsame");
+      hs4diff_bdt_modified->Draw("histsame");
+      //hs4diff_onnx_direct->Draw("histsame");
+      hs4diff_onnx_direct_grad->Draw("histsame");
+      //hs4diff_onnx_mse->Draw("histsame");
+      hs4diff_onnx_mse_grad->Draw("histsame");
+      //hs4diff_onnx_bce->Draw("histsame");
+      hs4diff_onnx_bce_grad->Draw("histsame");
+      //hs4diff_onnx_msemodified->Draw("histsame");
+      hs4diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(3)->Print("diffs_kstarmumu_s4.eps", "eps");
+      c2_->cd(3)->Print("diffs_kstarmumu_s4.root", "root");
+
+      c2_->cd(4)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hs5diff_onnx_groundtruth_grad->Draw("hist");
+      //hs5diff_onnx_groundtruth->Draw("histsame");
+      //hs5diff_onnx_efficiencytruth->Draw("histsame");
+      //hs5diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs5diff_bdt->Draw("histsame");
+      hs5diff_bdt_modified->Draw("histsame");
+      //hs5diff_onnx_direct->Draw("histsame");
+      hs5diff_onnx_direct_grad->Draw("histsame");
+      //hs5diff_onnx_mse->Draw("histsame");
+      hs5diff_onnx_mse_grad->Draw("histsame");
+      //hs5diff_onnx_bce->Draw("histsame");
+      hs5diff_onnx_bce_grad->Draw("histsame");
+      //hs5diff_onnx_msemodified->Draw("histsame");
+      hs5diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(4)->Print("diffs_kstarmumu_s5.eps", "eps");
+      c2_->cd(4)->Print("diffs_kstarmumu_s5.root", "root");
+      
+      c2_->cd(5)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hafbdiff_onnx_groundtruth_grad->Draw("hist");
+      //hafbdiff_onnx_groundtruth->Draw("histsame");
+      //hafbdiff_onnx_efficiencytruth->Draw("histsame");
+      //hafbdiff_onnx_efficiencytruth_grad->Draw("histsame");
+      hafbdiff_bdt->Draw("histsame");
+      hafbdiff_bdt_modified->Draw("histsame");
+      //hafbdiff_onnx_direct->Draw("histsame");
+      hafbdiff_onnx_direct_grad->Draw("histsame");
+      //hafbdiff_onnx_mse->Draw("histsame");
+      hafbdiff_onnx_mse_grad->Draw("histsame");
+      //hafbdiff_onnx_bce->Draw("histsame");
+      hafbdiff_onnx_bce_grad->Draw("histsame");
+      //hafbdiff_onnx_msemodified->Draw("histsame");
+      hafbdiff_onnx_msemodified_grad->Draw("histsame");
+      leg2->Draw();
+      c2_->cd(5)->Print("diffs_kstarmumu_afb.eps", "eps");
+      c2_->cd(5)->Print("diffs_kstarmumu_afb.root", "root");
+      
+      c2_->cd(6)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hs7diff_onnx_groundtruth_grad->Draw("hist");
+      //hs7diff_onnx_groundtruth->Draw("histsame");
+      //hs7diff_onnx_efficiencytruth->Draw("histsame");
+      //hs7diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs7diff_bdt->Draw("histsame");
+      hs7diff_bdt_modified->Draw("histsame");
+      //hs7diff_onnx_direct->Draw("histsame");
+      hs7diff_onnx_direct_grad->Draw("histsame");
+      //hs7diff_onnx_mse->Draw("histsame");
+      hs7diff_onnx_mse_grad->Draw("histsame");
+      //hs7diff_onnx_bce->Draw("histsame");
+      hs7diff_onnx_bce_grad->Draw("histsame");
+      //hs7diff_onnx_msemodified->Draw("histsame");
+      hs7diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(6)->Print("diffs_kstarmumu_s7.eps", "eps");
+      c2_->cd(6)->Print("diffs_kstarmumu_s7.root", "root");
+      
+      c2_->cd(7)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hs8diff_onnx_groundtruth_grad->Draw("hist");
+      //hs8diff_onnx_groundtruth->Draw("histsame");
+      //hs8diff_onnx_efficiencytruth->Draw("histsame");
+      //hs8diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs8diff_bdt->Draw("histsame");
+      hs8diff_bdt_modified->Draw("histsame");
+      //hs8diff_onnx_direct->Draw("histsame");
+      hs8diff_onnx_direct_grad->Draw("histsame");
+      //hs8diff_onnx_mse->Draw("histsame");
+      hs8diff_onnx_mse_grad->Draw("histsame");
+      //hs8diff_onnx_bce->Draw("histsame");
+      hs8diff_onnx_bce_grad->Draw("histsame");
+      //hs8diff_onnx_msemodified->Draw("histsame");
+      hs8diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(7)->Print("diffs_kstarmumu_s8.eps", "eps");
+      c2_->cd(7)->Print("diffs_kstarmumu_s8.root", "root");
+
+      c2_->cd(8)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      hs9diff_onnx_groundtruth_grad->Draw("hist");
+      //hs9diff_onnx_groundtruth->Draw("histsame");
+      //hs9diff_onnx_efficiencytruth->Draw("histsame");
+      //hs9diff_onnx_efficiencytruth_grad->Draw("histsame");
+      hs9diff_bdt->Draw("histsame");
+      hs9diff_bdt_modified->Draw("histsame");
+      //hs9diff_onnx_direct->Draw("histsame");
+      hs9diff_onnx_direct_grad->Draw("histsame");
+      //hs9diff_onnx_mse->Draw("histsame");
+      hs9diff_onnx_mse_grad->Draw("histsame");
+      //hs9diff_onnx_bce->Draw("histsame");
+      hs9diff_onnx_bce_grad->Draw("histsame");
+      //hs9diff_onnx_msemodified->Draw("histsame");
+      hs9diff_onnx_msemodified_grad->Draw("histsame");
+      c2_->cd(8)->Print("diffs_kstarmumu_s9.eps", "eps");
+      c2_->cd(8)->Print("diffs_kstarmumu_s9.root", "root");
+      
+      c2_->cd(9)->SetMargin(0.125, 0.05, 0.125, 0.05);
+      leg2->Draw();
+      c2_->cd(9)->Print("diffs_kstarmumu_legend.eps", "eps");
+      c2_->cd(9)->Print("diffs_kstarmumu_legend.root", "root");
+
+      c2_->Print("diffs_kstarmumu.eps", "eps");
+      c2_->Print("diffs_kstarmumu.root", "root");
+
+
 #endif
 
       return 0;

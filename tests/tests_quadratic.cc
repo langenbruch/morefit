@@ -144,6 +144,8 @@ int main()
   compute_opts.llvm_nthreads = 1;
   compute_opts.print_kernel = false;
   compute_opts.llvm_print_intermediate = false;
+  //compute_opts.llvm_vectorization = false;
+
   compute_opts.print();
   
   //typedef morefit::OpenCLBackend backendT;
@@ -494,7 +496,13 @@ int main()
       //nmodels = 10;
       
       //toy study
-      unsigned int nruns = 10;
+      unsigned int nruns = 20;
+      double dx = 0.25;
+      double dxdiff = 0.25;
+      unsigned int nbins = 80;
+      unsigned int ngen = 100000;//00;
+      ngen = 10000;
+      
       std::vector<double> c1_values_analytic(nmodels*nruns, 0.0);
       std::vector<double> c2_values_analytic(nmodels*nruns, 0.0);
       
@@ -512,6 +520,11 @@ int main()
       std::vector<double> c2_values_onnx_mse(nmodels*nruns, 0.0);
       std::vector<double> c1_values_onnx_mse_grad(nmodels*nruns, 0.0);
       std::vector<double> c2_values_onnx_mse_grad(nmodels*nruns, 0.0);
+
+      std::vector<double> c1_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> c2_values_onnx_bce(nmodels*nruns, 0.0);
+      std::vector<double> c1_values_onnx_bce_grad(nmodels*nruns, 0.0);
+      std::vector<double> c2_values_onnx_bce_grad(nmodels*nruns, 0.0);
 
       std::vector<double> c1_values_onnx_msemodified(nmodels*nruns, 0.0);
       std::vector<double> c2_values_onnx_msemodified(nmodels*nruns, 0.0);
@@ -531,6 +544,8 @@ int main()
 
       std::vector<double> c1_values_bdt(nmodels*nruns, 0.0);
       std::vector<double> c2_values_bdt(nmodels*nruns, 0.0);
+      std::vector<double> c1_values_bdt_modified(nmodels*nruns, 0.0);
+      std::vector<double> c2_values_bdt_modified(nmodels*nruns, 0.0);
 
       for (unsigned int m=0; m<nmodels; m++)
 	{
@@ -556,6 +571,7 @@ int main()
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_efficiencytruth_grad(&x, &c1, &c2, ("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
 	  */
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_bdt(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_bdt_modified(&x, &c1, &c2);
 
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_groundtruth(&x, &c1, &c2);
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_groundtruth_grad(&x, &c1, &c2);
@@ -565,6 +581,9 @@ int main()
 	  
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse(&x, &c1, &c2);
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_mse_grad(&x, &c1, &c2);
+	  
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_bce(&x, &c1, &c2);
+	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_bce_grad(&x, &c1, &c2);
 	  
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_msemodified(&x, &c1, &c2);
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_msemodified_grad(&x, &c1, &c2);
@@ -584,6 +603,9 @@ int main()
 	  quadratic_onnx_mse.set_acceptance_nn("weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
 	  quadratic_onnx_mse_grad.set_acceptance_nn("weights/torch_model_efficiency_mse_grad_"+std::to_string(m)+".onnx");
 
+	  quadratic_onnx_bce.set_acceptance_nn("weights/torch_model_efficiency_bce_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bce_grad.set_acceptance_nn("weights/torch_model_efficiency_bce_grad_"+std::to_string(m)+".onnx");
+
 	  quadratic_onnx_msemodified.set_acceptance_nn("weights/torch_model_efficiency_msemodified_"+std::to_string(m)+".onnx");
 	  quadratic_onnx_msemodified_grad.set_acceptance_nn("weights/torch_model_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
 	  
@@ -594,6 +616,7 @@ int main()
 	  quadratic_onnx_efficiencytruth_grad.set_acceptance_nn("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx");
 
 	  morefit::EventVector<kernelT, evalT> eff;
+	  morefit::EventVector<kernelT, evalT> eff_modified;
 #ifdef WITH_ROOT
 	  TFile* bdt_file = new TFile(("weights/bdt_direct_accvsrej_mse_"+std::to_string(m)+".root").c_str(), "READ");
 	  TTree* tree = (TTree*)bdt_file->Get("xgboost_regression");
@@ -610,11 +633,24 @@ int main()
 	      eff(i,1) = x_from;
 	      eff(i,2) = x_to;
 	    }
-	  //eff.print();
+	  //bdt using mse modified
+	  TFile* bdt_file_modified = new TFile(("weights/bdt_direct_accvsall_msemodified_"+std::to_string(m)+".root").c_str(), "READ");
+	  TTree* tree_modified = (TTree*)bdt_file_modified->Get("xgboost_regression");
+	  unsigned int nnodes_modified = tree_modified->GetEntries();      
+	  quadratic_bdt_modified.set_acceptance_bdt(eff_modified, nnodes_modified);
+	  //double value, x_from, x_to;
+	  tree_modified->SetBranchAddress("f0_from", &x_from);
+	  tree_modified->SetBranchAddress("f0_to", &x_to);
+	  tree_modified->SetBranchAddress("value", &value);
+	  for (unsigned int i=0; i<tree_modified->GetEntries(); i++)
+	    {
+	      tree_modified->GetEntry(i);
+	      eff_modified(i,0) = value;
+	      eff_modified(i,1) = x_from;
+	      eff_modified(i,2) = x_to;
+	    }
 #endif      
       
-	  unsigned int ngen = 100000;//00;
-	  ngen = 10000;
 	  std::cout <<"generating" << std::endl;
 	  morefit::generator_options gen_opts;
       
@@ -685,17 +721,6 @@ int main()
 	      std::cout << "ONNX_MSE RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
 	      c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
 	      c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
-
-	      /*
-	      //quadratic_onnx_mse2.
-	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
-	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
-	      fit.fit(&quadratic_onnx_mse2, params, &result);
-	      std::cout << "ONNX_MSE2 RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
-	      std::cout << "ONNX_MSE2 RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
-	      //c1_values_onnx_mse.at(m*nruns+i) = c1.get_value();
-	      //c2_values_onnx_mse.at(m*nruns+i) = c2.get_value();
-	      */
 	      
 	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
 	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
@@ -704,6 +729,22 @@ int main()
 	      std::cout << "ONNX_MSE GRAD RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
 	      c1_values_onnx_mse_grad.at(m*nruns+i) = c1.get_value();
 	      c2_values_onnx_mse_grad.at(m*nruns+i) = c2.get_value();
+	  
+	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
+	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
+	      fit.fit(&quadratic_onnx_bce, params, &result);
+	      std::cout << "ONNX_BCE RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
+	      std::cout << "ONNX_BCE RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
+	      c1_values_onnx_bce.at(m*nruns+i) = c1.get_value();
+	      c2_values_onnx_bce.at(m*nruns+i) = c2.get_value();
+	      
+	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
+	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
+	      fit.fit(&quadratic_onnx_bce_grad, params, &result);
+	      std::cout << "ONNX_BCE GRAD RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
+	      std::cout << "ONNX_BCE GRAD RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
+	      c1_values_onnx_bce_grad.at(m*nruns+i) = c1.get_value();
+	      c2_values_onnx_bce_grad.at(m*nruns+i) = c2.get_value();
 	  
 	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
 	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
@@ -766,9 +807,17 @@ int main()
 	      c1_values_bdt.at(m*nruns+i) = c1.get_value();
 	      c2_values_bdt.at(m*nruns+i) = c2.get_value();
 
+	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
+	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
+	      fit.fit(&quadratic_bdt_modified, params, &result);
+	      std::cout << "BDT MODIFIED RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
+	      std::cout << "BDT MODIFIED RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
+	      c1_values_bdt_modified.at(m*nruns+i) = c1.get_value();
+	      c2_values_bdt_modified.at(m*nruns+i) = c2.get_value();
+
 	    }
 	}
-      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "msemodified", "msemodified grad"};
+      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad"};
       std::vector<std::vector<double>> analytic_values = {c1_values_analytic, c2_values_analytic};
       std::vector<std::string> observables = {"$c_{1}$", "$c_{2}$"};
       std::vector<std::vector<double>> values_onnx_groundtruth = {c1_values_onnx_groundtruth, c2_values_onnx_groundtruth};
@@ -776,21 +825,26 @@ int main()
       std::vector<std::vector<double>> values_onnx_efficiencytruth = {c1_values_onnx_efficiencytruth, c2_values_onnx_efficiencytruth};
       std::vector<std::vector<double>> values_onnx_efficiencytruth_grad = {c1_values_onnx_efficiencytruth_grad, c2_values_onnx_efficiencytruth_grad};
       std::vector<std::vector<double>> values_bdt = {c1_values_bdt, c2_values_bdt};
+      std::vector<std::vector<double>> values_bdt_modified = {c1_values_bdt_modified, c2_values_bdt_modified};
       std::vector<std::vector<double>> values_onnx_bdt = {c1_values_onnx_bdt, c2_values_onnx_bdt};
       std::vector<std::vector<double>> values_onnx_bdt_grad = {c1_values_onnx_bdt_grad, c2_values_onnx_bdt_grad};
       std::vector<std::vector<double>> values_onnx_direct = {c1_values_onnx_direct, c2_values_onnx_direct};
       std::vector<std::vector<double>> values_onnx_direct_grad = {c1_values_onnx_direct_grad, c2_values_onnx_direct_grad};
       std::vector<std::vector<double>> values_onnx_mse = {c1_values_onnx_mse, c2_values_onnx_mse};
       std::vector<std::vector<double>> values_onnx_mse_grad = {c1_values_onnx_mse_grad, c2_values_onnx_mse_grad};
+      std::vector<std::vector<double>> values_onnx_bce = {c1_values_onnx_bce, c2_values_onnx_bce};
+      std::vector<std::vector<double>> values_onnx_bce_grad = {c1_values_onnx_bce_grad, c2_values_onnx_bce_grad};
       std::vector<std::vector<double>> values_onnx_msemodified = {c1_values_onnx_msemodified, c2_values_onnx_msemodified};
       std::vector<std::vector<double>> values_onnx_msemodified_grad = {c1_values_onnx_msemodified_grad, c2_values_onnx_msemodified_grad};
       std::vector<std::vector<std::vector<double>>> values = {
 	values_onnx_groundtruth, values_onnx_groundtruth_grad,
 	values_onnx_efficiencytruth, values_onnx_efficiencytruth_grad,
 	values_bdt,
+	values_bdt_modified,
 	values_onnx_bdt, values_onnx_bdt_grad,
 	values_onnx_direct, values_onnx_direct_grad,
 	values_onnx_mse, values_onnx_mse_grad,
+	values_onnx_bce, values_onnx_bce_grad,
 	values_onnx_msemodified, values_onnx_msemodified_grad
       };
       print_table_mean(analytic_values, values, observables, methods);
@@ -809,9 +863,6 @@ int main()
       gStyle->SetTitleSize(0.06,"xyz");
       gStyle->SetLegendFont(132);
       
-      double dx = 0.2;
-      double dxdiff = 0.2;
-      unsigned int nbins = 100;
       TH1D* hc1analytic = new TH1D("hc1analytic", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2analytic = new TH1D("hc2analytic", ";c_{2};#entries", nbins, -dx, +dx);
       
@@ -829,6 +880,11 @@ int main()
       TH1D* hc2onnx_mse = new TH1D("hc2onnx_mse", ";c_{2};#entries", nbins, -dx, +dx);
       TH1D* hc1onnx_mse_grad = new TH1D("hc1onnx_mse_grad", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2onnx_mse_grad = new TH1D("hc2onnx_mse_grad", ";c_{2};#entries", nbins, -dx, +dx);
+            
+      TH1D* hc1onnx_bce = new TH1D("hc1onnx_bce", ";c_{1};#entries", nbins, -dx, +dx);
+      TH1D* hc2onnx_bce = new TH1D("hc2onnx_bce", ";c_{2};#entries", nbins, -dx, +dx);
+      TH1D* hc1onnx_bce_grad = new TH1D("hc1onnx_bce_grad", ";c_{1};#entries", nbins, -dx, +dx);
+      TH1D* hc2onnx_bce_grad = new TH1D("hc2onnx_bce_grad", ";c_{2};#entries", nbins, -dx, +dx);
       
       TH1D* hc1onnx_msemodified = new TH1D("hc1onnx_msemodified", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2onnx_msemodified = new TH1D("hc2onnx_msemodified", ";c_{2};#entries", nbins, -dx, +dx);
@@ -847,6 +903,8 @@ int main()
       
       TH1D* hc1bdt = new TH1D("hc1bdt", ";c_{1};#entries", nbins, -dx, +dx);
       TH1D* hc2bdt = new TH1D("hc2bdt", ";c_{2};#entries", nbins, -dx, +dx);
+      TH1D* hc1bdt_modified = new TH1D("hc1bdt_modified", ";c_{1};#entries", nbins, -dx, +dx);
+      TH1D* hc2bdt_modified = new TH1D("hc2bdt_modified", ";c_{2};#entries", nbins, -dx, +dx);
 
 
       TH1D* hc1diff_onnx_groundtruth = new TH1D("hc1diff_onnx_groundtruth", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
@@ -863,6 +921,11 @@ int main()
       TH1D* hc2diff_onnx_mse = new TH1D("hc2diff_onnx_mse", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc1diff_onnx_mse_grad = new TH1D("hc1diff_onnx_mse_grad", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc2diff_onnx_mse_grad = new TH1D("hc2diff_onnx_mse_grad", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      
+      TH1D* hc1diff_onnx_bce = new TH1D("hc1diff_onnx_bce", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_onnx_bce = new TH1D("hc2diff_onnx_bce", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc1diff_onnx_bce_grad = new TH1D("hc1diff_onnx_bce_grad", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_onnx_bce_grad = new TH1D("hc2diff_onnx_bce_grad", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       
       TH1D* hc1diff_onnx_msemodified = new TH1D("hc1diff_onnx_msemodified", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc2diff_onnx_msemodified = new TH1D("hc2diff_onnx_msemodified", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
@@ -881,6 +944,8 @@ int main()
       
       TH1D* hc1diff_bdt = new TH1D("hc1diff_bdt", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc2diff_bdt = new TH1D("hc2diff_bdt", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc1diff_bdt_modified = new TH1D("hc1diff_bdt_modified", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_bdt_modified = new TH1D("hc2diff_bdt_modified", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       for (unsigned int i=0; i<nruns*nmodels; i++)
 	{
 	  //differences to analytic
@@ -898,6 +963,11 @@ int main()
 	  hc2diff_onnx_mse->Fill(c2_values_onnx_mse.at(i)-c2_values_analytic.at(i));
 	  hc1diff_onnx_mse_grad->Fill(c1_values_onnx_mse_grad.at(i)-c1_values_analytic.at(i));
 	  hc2diff_onnx_mse_grad->Fill(c2_values_onnx_mse_grad.at(i)-c2_values_analytic.at(i));
+	  	  
+	  hc1diff_onnx_bce->Fill(c1_values_onnx_bce.at(i)-c1_values_analytic.at(i));
+	  hc2diff_onnx_bce->Fill(c2_values_onnx_bce.at(i)-c2_values_analytic.at(i));
+	  hc1diff_onnx_bce_grad->Fill(c1_values_onnx_bce_grad.at(i)-c1_values_analytic.at(i));
+	  hc2diff_onnx_bce_grad->Fill(c2_values_onnx_bce_grad.at(i)-c2_values_analytic.at(i));
 	  
 	  hc1diff_onnx_msemodified->Fill(c1_values_onnx_msemodified.at(i)-c1_values_analytic.at(i));
 	  hc2diff_onnx_msemodified->Fill(c2_values_onnx_msemodified.at(i)-c2_values_analytic.at(i));
@@ -916,6 +986,8 @@ int main()
 	  	  
 	  hc1diff_bdt->Fill(c1_values_bdt.at(i)-c1_values_analytic.at(i));
 	  hc2diff_bdt->Fill(c2_values_bdt.at(i)-c2_values_analytic.at(i));
+	  hc1diff_bdt_modified->Fill(c1_values_bdt_modified.at(i)-c1_values_analytic.at(i));
+	  hc2diff_bdt_modified->Fill(c2_values_bdt_modified.at(i)-c2_values_analytic.at(i));
 	  //values
 	  hc1analytic->Fill(c1_values_analytic.at(i));
 	  hc2analytic->Fill(c2_values_analytic.at(i));
@@ -952,6 +1024,8 @@ int main()
 
 	  hc1bdt->Fill(c1_values_bdt.at(i));
 	  hc2bdt->Fill(c2_values_bdt.at(i));
+	  hc1bdt_modified->Fill(c1_values_bdt_modified.at(i));
+	  hc2bdt_modified->Fill(c2_values_bdt_modified.at(i));
 	}
       hc1analytic->SetMaximum(hc1analytic->GetMaximum()*1.25);
       hc2analytic->SetMaximum(hc2analytic->GetMaximum()*1.25);
@@ -969,9 +1043,9 @@ int main()
       hc1onnx_groundtruth_grad->SetLineColor(2);
       hc1onnx_groundtruth_grad->SetLineStyle(kDashed);	
       hc1onnx_direct->SetLineWidth(1.0);
-      hc1onnx_direct->SetLineColor(kYellow+2);
+      hc1onnx_direct->SetLineColor(kCyan);
       hc1onnx_direct_grad->SetLineWidth(1.0);
-      hc1onnx_direct_grad->SetLineColor(kYellow+2);
+      hc1onnx_direct_grad->SetLineColor(kCyan);
       hc1onnx_direct_grad->SetLineStyle(kDashed);	
       hc1onnx_mse->SetLineWidth(1.0);
       hc1onnx_mse->SetLineColor(4);
@@ -989,9 +1063,9 @@ int main()
       hc1onnx_bdt_grad->SetLineColor(kMagenta);
       hc1onnx_bdt_grad->SetLineStyle(kDashed);      
       hc1onnx_efficiencytruth->SetLineWidth(1.0);
-      hc1onnx_efficiencytruth->SetLineColor(7);
+      hc1onnx_efficiencytruth->SetLineColor(kYellow+1);
       hc1onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hc1onnx_efficiencytruth_grad->SetLineColor(7);
+      hc1onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hc1onnx_efficiencytruth_grad->SetLineStyle(kDashed);      
       hc1bdt->SetLineWidth(1.0);
       hc1bdt->SetLineColor(kGreen+2);
@@ -1009,6 +1083,7 @@ int main()
       hc1onnx_msemodified_grad->Draw("histsame");      
       //hc1onnx_bdt->Draw("histsame");
       //hc1onnx_bdt_grad->Draw("histsame");      
+      hc1bdt_modified->Draw("histsame");
       hc1bdt->Draw("histsame");
 
       TLine* line = new TLine();
@@ -1030,8 +1105,6 @@ int main()
       leg->AddEntry(hc1onnx_mse_grad,"ONNX mse grad.","l");
       leg->AddEntry(hc1onnx_msemodified,"ONNX msemodified","l");
       leg->AddEntry(hc1onnx_msemodified_grad,"ONNX msemodified grad.","l");
-      //leg->AddEntry(hc1onnx_bdt,"ONNX bdt","l");
-      //leg->AddEntry(hc1onnx_bdt_grad,"ONNX bdt grad.","l");
       leg->Draw();
       c0_->cd(1)->Print("values_c1.eps", "eps");
       c0_->cd(1)->Print("values_c1.root", "root");
@@ -1045,9 +1118,9 @@ int main()
       hc2onnx_groundtruth_grad->SetLineColor(2);
       hc2onnx_groundtruth_grad->SetLineStyle(kDashed);	
       hc2onnx_direct->SetLineWidth(1.0);
-      hc2onnx_direct->SetLineColor(kYellow+2);
+      hc2onnx_direct->SetLineColor(kCyan);
       hc2onnx_direct_grad->SetLineWidth(1.0);
-      hc2onnx_direct_grad->SetLineColor(kYellow+2);
+      hc2onnx_direct_grad->SetLineColor(kCyan);
       hc2onnx_direct_grad->SetLineStyle(kDashed);	
       hc2onnx_mse->SetLineWidth(1.0);
       hc2onnx_mse->SetLineColor(4);
@@ -1065,9 +1138,9 @@ int main()
       hc2onnx_bdt_grad->SetLineColor(kMagenta);
       hc2onnx_bdt_grad->SetLineStyle(kDashed);      
       hc2onnx_efficiencytruth->SetLineWidth(1.0);
-      hc2onnx_efficiencytruth->SetLineColor(7);
+      hc2onnx_efficiencytruth->SetLineColor(kYellow+1);
       hc2onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hc2onnx_efficiencytruth_grad->SetLineColor(7);
+      hc2onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hc2onnx_efficiencytruth_grad->SetLineStyle(kDashed);      
       hc2bdt->SetLineWidth(1.0);
       hc2bdt->SetLineColor(kGreen+2);
@@ -1085,6 +1158,7 @@ int main()
       hc2onnx_msemodified_grad->Draw("histsame");      
       //hc2onnx_bdt->Draw("histsame");
       //hc2onnx_bdt_grad->Draw("histsame");      
+      hc2bdt_modified->Draw("histsame");
       hc2bdt->Draw("histsame");
 
       line->DrawLine(genc2, 0.0, genc2, hc2analytic->GetMaximum());
@@ -1105,9 +1179,9 @@ int main()
       hc1diff_onnx_groundtruth_grad->SetLineColor(2);
       hc1diff_onnx_groundtruth_grad->SetLineStyle(kDashed);      
       hc1diff_onnx_direct->SetLineWidth(1.0);
-      hc1diff_onnx_direct->SetLineColor(kYellow+2);
+      hc1diff_onnx_direct->SetLineColor(kCyan);
       hc1diff_onnx_direct_grad->SetLineWidth(1.0);
-      hc1diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hc1diff_onnx_direct_grad->SetLineColor(kCyan);
       hc1diff_onnx_direct_grad->SetLineStyle(kDashed);	
       hc1diff_onnx_mse->SetLineWidth(1.0);
       hc1diff_onnx_mse->SetLineColor(4);
@@ -1125,13 +1199,20 @@ int main()
       hc1diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hc1diff_onnx_bdt_grad->SetLineStyle(kDashed);      
       hc1diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hc1diff_onnx_efficiencytruth->SetLineColor(7);
+      hc1diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hc1diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hc1diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hc1diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hc1diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);      
       hc1diff_bdt->SetLineWidth(1.0);
       hc1diff_bdt->SetLineColor(kGreen+2);
-      
+      hc1diff_bdt_modified->SetLineWidth(1.0);
+      hc1diff_bdt_modified->SetLineColor(kMagenta);
+      hc1diff_onnx_bce->SetLineWidth(1.0);
+      hc1diff_onnx_bce->SetLineColor(kViolet+1);
+      hc1diff_onnx_bce_grad->SetLineWidth(1.0);
+      hc1diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hc1diff_onnx_bce_grad->SetLineStyle(kDashed);      
+
       hc1diff_onnx_groundtruth_grad->Draw("hist");      
       hc1diff_onnx_groundtruth->Draw("histsame");
       hc1diff_onnx_efficiencytruth->Draw("histsame");
@@ -1140,33 +1221,31 @@ int main()
       hc1diff_onnx_direct_grad->Draw("histsame");      
       hc1diff_onnx_mse->Draw("histsame");
       hc1diff_onnx_mse_grad->Draw("histsame");      
+      hc1diff_onnx_bce->Draw("histsame");
+      hc1diff_onnx_bce_grad->Draw("histsame");      
       hc1diff_onnx_msemodified->Draw("histsame");
       hc1diff_onnx_msemodified_grad->Draw("histsame");      
-      //hc1diff_onnx_bdt->Draw("histsame");
-      //hc1diff_onnx_bdt_grad->Draw("histsame");      
+      hc1diff_bdt_modified->Draw("histsame");
       hc1diff_bdt->Draw("histsame");
       
-      //hc1diff_onnx_groundtruth->Draw("histsame");
-      //hc1diff_onnx_groundtruth_grad->Draw("histsame");      
-
       TLegend* leg2 = new TLegend(0.6, 0.5, 0.95, 0.95);
-      //leg2->AddEntry(hc1analytic,"analytic truth","l");
-      leg2->AddEntry(hc1bdt,"BDT modeling #epsilon","l");
-      leg2->AddEntry(hc1onnx_groundtruth,"ONNX groundtruth","l");
-      leg2->AddEntry(hc1onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
-      leg2->AddEntry(hc1onnx_efficiencytruth,"ONNX efficiencytruth","l");
-      leg2->AddEntry(hc1onnx_efficiencytruth_grad,"ONNX efficiencytruth grad.","l");
-      leg2->AddEntry(hc1onnx_direct,"ONNX direct","l");
-      leg2->AddEntry(hc1onnx_direct_grad,"ONNX direct grad.","l");
-      leg2->AddEntry(hc1onnx_mse,"ONNX mse","l");
-      leg2->AddEntry(hc1onnx_mse_grad,"ONNX mse grad.","l");
-      leg2->AddEntry(hc1onnx_msemodified,"ONNX msemodified","l");
-      leg2->AddEntry(hc1onnx_msemodified_grad,"ONNX msemodified grad.","l");
-      //leg2->AddEntry(hc1onnx_bdt,"ONNX bdt","l");
-      //leg2->AddEntry(hc1onnx_bdt_grad,"ONNX bdt grad.","l");
+      leg2->AddEntry(hc1diff_bdt,"BDT modeling #epsilon, MSE","l");
+      leg2->AddEntry(hc1diff_bdt_modified,"BDT modeling #epsilon, modified MSE","l");
+      leg2->AddEntry(hc1diff_onnx_groundtruth,"ONNX groundtruth","l");
+      leg2->AddEntry(hc1diff_onnx_groundtruth_grad,"ONNX groundtruth grad.","l");
+      leg2->AddEntry(hc1diff_onnx_efficiencytruth,"ONNX #epsilon truth","l");
+      leg2->AddEntry(hc1diff_onnx_efficiencytruth_grad,"ONNX #epsilontruth grad.","l");
+      leg2->AddEntry(hc1diff_onnx_direct,"ONNX direct","l");
+      leg2->AddEntry(hc1diff_onnx_direct_grad,"ONNX direct grad.","l");
+      leg2->AddEntry(hc1diff_onnx_mse,"ONNX MSE","l");
+      leg2->AddEntry(hc1diff_onnx_mse_grad,"ONNX MSE grad.","l");
+      leg2->AddEntry(hc1diff_onnx_bce,"ONNX BCE","l");
+      leg2->AddEntry(hc1diff_onnx_bce_grad,"ONNX BCE grad.","l");
+      leg2->AddEntry(hc1diff_onnx_msemodified,"ONNX modified MSE","l");
+      leg2->AddEntry(hc1diff_onnx_msemodified_grad,"ONNX modified MSE grad.","l");
       leg2->Draw();
-      c1_->cd(1)->Print("diffs_c1.eps", "eps");
-      c1_->cd(1)->Print("diffs_c1.root", "root");
+      c1_->cd(1)->Print("diffs_c1_full.eps", "eps");
+      c1_->cd(1)->Print("diffs_c1_full.root", "root");
       
       c1_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
 
@@ -1176,9 +1255,9 @@ int main()
       hc2diff_onnx_groundtruth_grad->SetLineColor(2);
       hc2diff_onnx_groundtruth_grad->SetLineStyle(kDashed);	
       hc2diff_onnx_direct->SetLineWidth(1.0);
-      hc2diff_onnx_direct->SetLineColor(kYellow+2);
+      hc2diff_onnx_direct->SetLineColor(kCyan);
       hc2diff_onnx_direct_grad->SetLineWidth(1.0);
-      hc2diff_onnx_direct_grad->SetLineColor(kYellow+2);
+      hc2diff_onnx_direct_grad->SetLineColor(kCyan);
       hc2diff_onnx_direct_grad->SetLineStyle(kDashed);	
       hc2diff_onnx_mse->SetLineWidth(1.0);
       hc2diff_onnx_mse->SetLineColor(4);
@@ -1196,12 +1275,19 @@ int main()
       hc2diff_onnx_bdt_grad->SetLineColor(kMagenta);
       hc2diff_onnx_bdt_grad->SetLineStyle(kDashed);      
       hc2diff_onnx_efficiencytruth->SetLineWidth(1.0);
-      hc2diff_onnx_efficiencytruth->SetLineColor(7);
+      hc2diff_onnx_efficiencytruth->SetLineColor(kYellow+1);
       hc2diff_onnx_efficiencytruth_grad->SetLineWidth(1.0);
-      hc2diff_onnx_efficiencytruth_grad->SetLineColor(7);
+      hc2diff_onnx_efficiencytruth_grad->SetLineColor(kYellow+1);
       hc2diff_onnx_efficiencytruth_grad->SetLineStyle(kDashed);      
       hc2diff_bdt->SetLineWidth(1.0);
       hc2diff_bdt->SetLineColor(kGreen+2);
+      hc2diff_bdt_modified->SetLineWidth(1.0);
+      hc2diff_bdt_modified->SetLineColor(kMagenta);
+      hc2diff_onnx_bce->SetLineWidth(1.0);
+      hc2diff_onnx_bce->SetLineColor(kViolet+1);
+      hc2diff_onnx_bce_grad->SetLineWidth(1.0);
+      hc2diff_onnx_bce_grad->SetLineColor(kViolet+1);
+      hc2diff_onnx_bce_grad->SetLineStyle(kDashed);      
       
       hc2diff_onnx_groundtruth_grad->Draw("hist");
       hc2diff_onnx_groundtruth->Draw("histsame");
@@ -1211,20 +1297,92 @@ int main()
       hc2diff_onnx_direct_grad->Draw("histsame");      
       hc2diff_onnx_mse->Draw("histsame");
       hc2diff_onnx_mse_grad->Draw("histsame");      
+      hc2diff_onnx_bce->Draw("histsame");
+      hc2diff_onnx_bce_grad->Draw("histsame");      
       hc2diff_onnx_msemodified->Draw("histsame");
       hc2diff_onnx_msemodified_grad->Draw("histsame");      
-      //hc2diff_onnx_bdt->Draw("histsame");
-      //hc2diff_onnx_bdt_grad->Draw("histsame");      
+      hc2diff_bdt_modified->Draw("histsame");
       hc2diff_bdt->Draw("histsame");
-      
-      //hc2diff_onnx_groundtruth->Draw("histsame");
-      //hc2diff_onnx_groundtruth_grad->Draw("histsame");      
 
       leg2->Draw();
-      c1_->cd(2)->Print("diffs_c2.eps", "eps");
-      c1_->cd(2)->Print("diffs_c2.root", "root");
-      c1_->Print("diffs.eps", "eps");
-      c1_->Print("diffs.root", "root");
+      c1_->cd(2)->Print("diffs_c2_full.eps", "eps");
+      c1_->cd(2)->Print("diffs_c2_full.root", "root");
+      c1_->Print("diffs_full.eps", "eps");
+      c1_->Print("diffs_full.root", "root");
+
+
+      TCanvas* c2_ = new TCanvas("c2", "c2", 1600, 600);
+      c2_->Divide(2,1);
+      c2_->cd(1)->SetMargin(0.125, 0.05, 0.125, 0.05);
+
+      hc1diff_onnx_groundtruth_grad->SetLineStyle(kSolid);      
+      hc1diff_onnx_bce_grad->SetLineStyle(kSolid);      
+      hc1diff_onnx_msemodified_grad->SetLineStyle(kSolid);      
+      hc1diff_onnx_mse_grad->SetLineStyle(kSolid);      
+      hc1diff_onnx_direct_grad->SetLineStyle(kSolid);      
+      hc2diff_onnx_groundtruth_grad->SetLineStyle(kSolid);      
+      hc2diff_onnx_bce_grad->SetLineStyle(kSolid);      
+      hc2diff_onnx_msemodified_grad->SetLineStyle(kSolid);      
+      hc2diff_onnx_mse_grad->SetLineStyle(kSolid);      
+      hc2diff_onnx_direct_grad->SetLineStyle(kSolid);      
+      
+      hc1diff_onnx_groundtruth_grad->Draw("hist");      
+      //hc1diff_onnx_groundtruth->Draw("histsame");
+      //hc1diff_onnx_efficiencytruth->Draw("histsame");
+      //hc1diff_onnx_efficiencytruth_grad->Draw("histsame");      
+      //hc1diff_onnx_direct->Draw("histsame");
+      hc1diff_onnx_direct_grad->Draw("histsame");      
+      //hc1diff_onnx_mse->Draw("histsame");
+      hc1diff_onnx_mse_grad->Draw("histsame");      
+      //hc1diff_onnx_bce->Draw("histsame");
+      hc1diff_onnx_bce_grad->Draw("histsame");      
+      //hc1diff_onnx_msemodified->Draw("histsame");
+      hc1diff_onnx_msemodified_grad->Draw("histsame");      
+      hc1diff_bdt_modified->Draw("histsame");
+      hc1diff_bdt->Draw("histsame");
+
+      TLegend* leg3 = new TLegend(0.6, 0.5, 0.95, 0.95);
+      //leg3->AddEntry(hc1diff_onnx_groundtruth,"ONNX groundtruth","l");
+      leg3->AddEntry(hc1diff_onnx_groundtruth_grad,"i) ONNX groundtruth grad.","l");
+      //leg3->AddEntry(hc1diff_onnx_efficiencytruth,"ONNX #epsilon truth","l");
+      //leg3->AddEntry(hc1diff_onnx_efficiencytruth_grad,"ONNX #epsilontruth grad.","l");
+      //leg3->AddEntry(hc1diff_onnx_direct,"ONNX direct","l");
+      leg3->AddEntry(hc1diff_onnx_direct_grad,"iii) ONNX direct grad.","l");
+      //leg3->AddEntry(hc1diff_onnx_mse,"ONNX MSE","l");
+      leg3->AddEntry(hc1diff_onnx_mse_grad,"iv) ONNX MSE grad.","l");
+      //leg3->AddEntry(hc1diff_onnx_bce,"ONNX BCE","l");
+      leg3->AddEntry(hc1diff_onnx_bce_grad,"v) ONNX BCE grad.","l");
+      //leg3->AddEntry(hc1diff_onnx_msemodified,"ONNX modified MSE","l");
+      leg3->AddEntry(hc1diff_onnx_msemodified_grad,"vi) ONNX modified MSE grad.","l");
+      leg3->AddEntry(hc1diff_bdt,"vii) BDT modeling #epsilon, MSE","l");
+      leg3->AddEntry(hc1diff_bdt_modified,"viii) BDT modeling #epsilon, modified MSE","l");
+      leg3->Draw();
+      c2_->cd(1)->Print("diffs_c1.eps", "eps");
+      c2_->cd(1)->Print("diffs_c1.root", "root");
+      
+      c2_->cd(2)->SetMargin(0.125, 0.05, 0.125, 0.05);
+
+      hc2diff_onnx_groundtruth_grad->Draw("hist");
+      //hc2diff_onnx_groundtruth->Draw("histsame");
+      //hc2diff_onnx_efficiencytruth->Draw("histsame");
+      //hc2diff_onnx_efficiencytruth_grad->Draw("histsame");      
+      //hc2diff_onnx_direct->Draw("histsame");
+      hc2diff_onnx_direct_grad->Draw("histsame");      
+      //hc2diff_onnx_mse->Draw("histsame");
+      hc2diff_onnx_mse_grad->Draw("histsame");      
+      //hc2diff_onnx_bce->Draw("histsame");
+      hc2diff_onnx_bce_grad->Draw("histsame");      
+      //hc2diff_onnx_msemodified->Draw("histsame");
+      hc2diff_onnx_msemodified_grad->Draw("histsame");      
+      hc2diff_bdt_modified->Draw("histsame");
+      hc2diff_bdt->Draw("histsame");
+
+      leg3->Draw();
+      c2_->cd(2)->Print("diffs_c2.eps", "eps");
+      c2_->cd(2)->Print("diffs_c2.root", "root");
+      c2_->Print("diffs.eps", "eps");
+      c2_->Print("diffs.root", "root");
+
 #endif
 
 
