@@ -502,6 +502,8 @@ int main()
       unsigned int nbins = 80;
       unsigned int ngen = 100000;//00;
       ngen = 10000;
+
+      unsigned int nmcstats = 100000;
       
       std::vector<double> c1_values_analytic(nmodels*nruns, 0.0);
       std::vector<double> c2_values_analytic(nmodels*nruns, 0.0);
@@ -547,10 +549,18 @@ int main()
       std::vector<double> c1_values_bdt_modified(nmodels*nruns, 0.0);
       std::vector<double> c2_values_bdt_modified(nmodels*nruns, 0.0);
 
+      std::vector<double> c1_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> c2_values_montecarlo(nmodels*nruns, 0.0);      
+
       for (unsigned int m=0; m<nmodels; m++)
 	{
 	  
 	  morefit::QuadraticPDFNormalisedAnalyticEps<kernelT, evalT> quadratic_analytic(&x, &c1, &c2);
+
+	  morefit::QuadraticPDFMonteCarloInt<kernelT, evalT> quadratic_montecarlo(&x, &c1, &c2);
+	  morefit::EventVector<kernelT, evalT> montecarlo_vector;//do not init here TODO
+	  quadratic_montecarlo.prepare_monte_carlo(montecarlo_vector, &rnd, nmcstats);
+	  
 	  /*
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_groundtruth(&x, &c1, &c2, ("weights/torch_model_groundtruth_"+std::to_string(m)+".onnx").c_str());	  
 	  morefit::QuadraticPDFNormalisedOnnxEps<kernelT, evalT> quadratic_onnx_groundtruth_grad(&x, &c1, &c2, ("weights/torch_model_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
@@ -815,9 +825,18 @@ int main()
 	      c1_values_bdt_modified.at(m*nruns+i) = c1.get_value();
 	      c2_values_bdt_modified.at(m*nruns+i) = c2.get_value();
 
+	      c1.init("c1", "c_{1}", startc1, -1.0, 1.0, 0.01, false);
+	      c2.init("c2", "c_{2}", startc2, -1.0, 1.0, 0.01, false);
+	      fit.fit(&quadratic_montecarlo, params, &result);
+	      std::cout << "MONTECARLO RESULT c1 = " << c1.get_value() << "+-" << c1.get_error() << std::endl;
+	      std::cout << "MONTECARLO RESULT c2 = " << c2.get_value() << "+-" << c2.get_error() << std::endl;
+	      c1_values_montecarlo.at(m*nruns+i) = c1.get_value();
+	      c2_values_montecarlo.at(m*nruns+i) = c2.get_value();
+
+
 	    }
 	}
-      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad"};
+      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad", "montecarlo"};
       std::vector<std::vector<double>> analytic_values = {c1_values_analytic, c2_values_analytic};
       std::vector<std::string> observables = {"$c_{1}$", "$c_{2}$"};
       std::vector<std::vector<double>> values_onnx_groundtruth = {c1_values_onnx_groundtruth, c2_values_onnx_groundtruth};
@@ -836,6 +855,7 @@ int main()
       std::vector<std::vector<double>> values_onnx_bce_grad = {c1_values_onnx_bce_grad, c2_values_onnx_bce_grad};
       std::vector<std::vector<double>> values_onnx_msemodified = {c1_values_onnx_msemodified, c2_values_onnx_msemodified};
       std::vector<std::vector<double>> values_onnx_msemodified_grad = {c1_values_onnx_msemodified_grad, c2_values_onnx_msemodified_grad};
+      std::vector<std::vector<double>> values_montecarlo = {c1_values_montecarlo, c2_values_montecarlo};
       std::vector<std::vector<std::vector<double>>> values = {
 	values_onnx_groundtruth, values_onnx_groundtruth_grad,
 	values_onnx_efficiencytruth, values_onnx_efficiencytruth_grad,
@@ -845,7 +865,8 @@ int main()
 	values_onnx_direct, values_onnx_direct_grad,
 	values_onnx_mse, values_onnx_mse_grad,
 	values_onnx_bce, values_onnx_bce_grad,
-	values_onnx_msemodified, values_onnx_msemodified_grad
+	values_onnx_msemodified, values_onnx_msemodified_grad,
+	values_montecarlo
       };
       print_table_mean(analytic_values, values, observables, methods);
       print_table_rms(analytic_values, values, observables, methods);
@@ -946,6 +967,10 @@ int main()
       TH1D* hc2diff_bdt = new TH1D("hc2diff_bdt", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc1diff_bdt_modified = new TH1D("hc1diff_bdt_modified", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hc2diff_bdt_modified = new TH1D("hc2diff_bdt_modified", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
+      TH1D* hc1diff_montecarlo = new TH1D("hc1diff_montecarlo", ";c_{1} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hc2diff_montecarlo = new TH1D("hc2diff_montecarlo", ";c_{2} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
       for (unsigned int i=0; i<nruns*nmodels; i++)
 	{
 	  //differences to analytic
@@ -988,6 +1013,10 @@ int main()
 	  hc2diff_bdt->Fill(c2_values_bdt.at(i)-c2_values_analytic.at(i));
 	  hc1diff_bdt_modified->Fill(c1_values_bdt_modified.at(i)-c1_values_analytic.at(i));
 	  hc2diff_bdt_modified->Fill(c2_values_bdt_modified.at(i)-c2_values_analytic.at(i));
+
+	  hc1diff_montecarlo->Fill(c1_values_montecarlo.at(i)-c1_values_analytic.at(i));
+	  hc2diff_montecarlo->Fill(c2_values_montecarlo.at(i)-c2_values_analytic.at(i));
+
 	  //values
 	  hc1analytic->Fill(c1_values_analytic.at(i));
 	  hc2analytic->Fill(c2_values_analytic.at(i));
@@ -1227,6 +1256,8 @@ int main()
       hc1diff_onnx_msemodified_grad->Draw("histsame");      
       hc1diff_bdt_modified->Draw("histsame");
       hc1diff_bdt->Draw("histsame");
+      hc1diff_montecarlo->Draw("histsame");
+
       
       TLegend* leg2 = new TLegend(0.6, 0.5, 0.95, 0.95);
       leg2->AddEntry(hc1diff_bdt,"BDT modeling #epsilon, MSE","l");
@@ -1303,6 +1334,7 @@ int main()
       hc2diff_onnx_msemodified_grad->Draw("histsame");      
       hc2diff_bdt_modified->Draw("histsame");
       hc2diff_bdt->Draw("histsame");
+      hc2diff_montecarlo->Draw("histsame");
 
       leg2->Draw();
       c1_->cd(2)->Print("diffs_c2_full.eps", "eps");
@@ -1340,6 +1372,7 @@ int main()
       hc1diff_onnx_msemodified_grad->Draw("histsame");      
       hc1diff_bdt_modified->Draw("histsame");
       hc1diff_bdt->Draw("histsame");
+      hc1diff_montecarlo->Draw("histsame");
 
       TLegend* leg3 = new TLegend(0.6, 0.5, 0.95, 0.95);
       //leg3->AddEntry(hc1diff_onnx_groundtruth,"ONNX groundtruth","l");
@@ -1376,6 +1409,7 @@ int main()
       hc2diff_onnx_msemodified_grad->Draw("histsame");      
       hc2diff_bdt_modified->Draw("histsame");
       hc2diff_bdt->Draw("histsame");
+      hc2diff_montecarlo->Draw("histsame");
 
       leg3->Draw();
       c2_->cd(2)->Print("diffs_c2.eps", "eps");

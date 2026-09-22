@@ -701,14 +701,20 @@ int main()
       unsigned int nmodels = 100;
       unsigned int ngen = 100000;//00;
       ngen = 10000;
+      //nmodels = 10;
       
       //toy study
       unsigned int nruns = 20;
-
+      nruns = 1;
+      
       double dx = 0.1;
       double dxdiff = 0.05;
       unsigned int nbins = 80;
 
+      unsigned int nmcstats = 100000;
+      //morefit::EventVector<kernelT, evalT> montecarlo_vector;//do not init here TODO
+      //morefit::EventVector<kernelT, evalT> montecarlo_vector({&ctl, &ctk, &phi}, nmcstats);  
+	
       std::vector<double> fl_values_analytic(nmodels*nruns, 0.0);      
       std::vector<double> s3_values_analytic(nmodels*nruns, 0.0);
       std::vector<double> s4_values_analytic(nmodels*nruns, 0.0);
@@ -863,11 +869,25 @@ int main()
       std::vector<double> s8_values_bdt_modified(nmodels*nruns, 0.0);
       std::vector<double> s9_values_bdt_modified(nmodels*nruns, 0.0);
 
+      std::vector<double> fl_values_montecarlo(nmodels*nruns, 0.0);      
+      std::vector<double> s3_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> s4_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> s5_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> afb_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> s7_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> s8_values_montecarlo(nmodels*nruns, 0.0);
+      std::vector<double> s9_values_montecarlo(nmodels*nruns, 0.0);
+      
       for (unsigned int m=0; m<nmodels; m++)
 	{
 	  std::cout << "model " << m << std::endl;
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 
+	  morefit::KstarmumuAngularPDFMonteCarloInt<kernelT, evalT> kstarmumu_montecarlo(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  morefit::EventVector<kernelT, evalT> montecarlo_vector;//do not init here TODO
+	  kstarmumu_montecarlo.prepare_monte_carlo(montecarlo_vector, &rnd, nmcstats);
+	  //montecarlo_vector.print();
+	  
 	  /*
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
 	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
@@ -1321,6 +1341,29 @@ int main()
 	      s8_values_analytic.at(m*nruns+i) = S8.get_value();
 	      s9_values_analytic.at(m*nruns+i) = S9.get_value();
 
+
+
+	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
+	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
+	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
+	      S5.init("S5", "S_{5}", starts5, -1.0, 1.0, 0.01, false);
+	      Afb.init("Afb", "A_{\\mathrm{FB}}", startafb, -1.0, 1.0, 0.01, false);
+	      S7.init("S7", "S_{7}", starts7, -1.0, 1.0, 0.01, false);
+	      S8.init("S8", "S_{8}", starts8, -1.0, 1.0, 0.01, false);
+	      S9.init("S9", "S_{9}", starts9, -1.0, 1.0, 0.01, false);	      
+	      std::cout << "fitting montecarlo" << std::endl;
+	      fit.fit(&kstarmumu_montecarlo, params, &result);
+
+	      fl_values_montecarlo.at(m*nruns+i) = Fl.get_value();
+	      s3_values_montecarlo.at(m*nruns+i) = S3.get_value();
+	      s4_values_montecarlo.at(m*nruns+i) = S4.get_value();
+	      s5_values_montecarlo.at(m*nruns+i) = S5.get_value();
+	      afb_values_montecarlo.at(m*nruns+i) = Afb.get_value();
+	      s7_values_montecarlo.at(m*nruns+i) = S7.get_value();
+	      s8_values_montecarlo.at(m*nruns+i) = S8.get_value();
+	      s9_values_montecarlo.at(m*nruns+i) = S9.get_value();
+
+
 	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
 	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
 	      S4.init("S4", "S_{4}", starts4, -1.0, 1.0, 0.01, false);
@@ -1364,7 +1407,7 @@ int main()
 	    }
 	}
 
-      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad"};
+      std::vector<std::string> methods = {"groundtruth", "groundtruth grad", "$\\epsilon$ truth", "$\\epsilon$ truth grad", "BDT", "BDT msemodified", "modeled BDT", "modeled BDT grad", "direct", "direct grad", "mse", "mse grad", "bce", "bce grad", "msemodified", "msemodified grad", "montecarlo"};
       std::vector<std::vector<double>> analytic_values = {fl_values_analytic, s3_values_analytic, s4_values_analytic, s5_values_analytic, afb_values_analytic, s7_values_analytic, s8_values_analytic, s9_values_analytic};
       std::vector<std::string> observables = {"$F_{\\mathrm{L}}$", "$S_{3}$", "$S_{4}$", "$S_{5}$", "$A_{\\mathrm{FB}}$", "$S_{7}$", "$S_{8}$", "$S_{9}$"};
       std::vector<std::vector<double>> values_onnx_groundtruth = {fl_values_onnx_groundtruth, s3_values_onnx_groundtruth, s4_values_onnx_groundtruth, s5_values_onnx_groundtruth, afb_values_onnx_groundtruth, s7_values_onnx_groundtruth, s8_values_onnx_groundtruth, s9_values_onnx_groundtruth};
@@ -1383,6 +1426,8 @@ int main()
       std::vector<std::vector<double>> values_onnx_bce_grad = {fl_values_onnx_bce_grad, s3_values_onnx_bce_grad, s4_values_onnx_bce_grad, s5_values_onnx_bce_grad, afb_values_onnx_bce_grad, s7_values_onnx_bce_grad, s8_values_onnx_bce_grad, s9_values_onnx_bce_grad};
       std::vector<std::vector<double>> values_onnx_msemodified = {fl_values_onnx_msemodified, s3_values_onnx_msemodified, s4_values_onnx_msemodified, s5_values_onnx_msemodified, afb_values_onnx_msemodified, s7_values_onnx_msemodified, s8_values_onnx_msemodified, s9_values_onnx_msemodified};
       std::vector<std::vector<double>> values_onnx_msemodified_grad = {fl_values_onnx_msemodified_grad, s3_values_onnx_msemodified_grad, s4_values_onnx_msemodified_grad, s5_values_onnx_msemodified_grad, afb_values_onnx_msemodified_grad, s7_values_onnx_msemodified_grad, s8_values_onnx_msemodified_grad, s9_values_onnx_msemodified_grad};
+
+      std::vector<std::vector<double>> values_montecarlo = {fl_values_montecarlo, s3_values_montecarlo, s4_values_montecarlo, s5_values_montecarlo, afb_values_montecarlo, s7_values_montecarlo, s8_values_montecarlo, s9_values_montecarlo};
       std::vector<std::vector<std::vector<double>>> values = {
 	values_onnx_groundtruth, values_onnx_groundtruth_grad,
 	values_onnx_efficiencytruth, values_onnx_efficiencytruth_grad,
@@ -1392,7 +1437,8 @@ int main()
 	values_onnx_direct, values_onnx_direct_grad,
 	values_onnx_mse, values_onnx_mse_grad,
 	values_onnx_bce, values_onnx_bce_grad,
-	values_onnx_msemodified, values_onnx_msemodified_grad
+	values_onnx_msemodified, values_onnx_msemodified_grad,
+	values_montecarlo
       };
       print_table_mean(analytic_values, values, observables, methods);
       print_table_rms(analytic_values, values, observables, methods);
@@ -1565,6 +1611,15 @@ int main()
       TH1D* hs8diff_bdt_modified = new TH1D("hs8diff_bdt_modified", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
       TH1D* hs9diff_bdt_modified = new TH1D("hs9diff_bdt_modified", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
 
+      TH1D* hfldiff_montecarlo = new TH1D("hfldiff_montecarlo", ";F_{L} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs3diff_montecarlo = new TH1D("hs3diff_montecarlo", ";S_{3} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs4diff_montecarlo = new TH1D("hs4diff_montecarlo", ";S_{4} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs5diff_montecarlo = new TH1D("hs5diff_montecarlo", ";S_{5} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hafbdiff_montecarlo = new TH1D("hafbdiff_montecarlo", ";A_{FB} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs7diff_montecarlo = new TH1D("hs7diff_montecarlo", ";S_{7} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs8diff_montecarlo = new TH1D("hs8diff_montecarlo", ";S_{8} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+      TH1D* hs9diff_montecarlo = new TH1D("hs9diff_montecarlo", ";S_{9} modeled-analytic;#entries", nbins, -dxdiff, +dxdiff);
+
 
       for (unsigned int i=0; i<nruns*nmodels; i++)
 	{
@@ -1720,6 +1775,17 @@ int main()
 	  hs7diff_bdt_modified->Fill(s7_values_bdt_modified.at(i)-s7_values_analytic.at(i));
 	  hs8diff_bdt_modified->Fill(s8_values_bdt_modified.at(i)-s8_values_analytic.at(i));
 	  hs9diff_bdt_modified->Fill(s9_values_bdt_modified.at(i)-s9_values_analytic.at(i));
+
+	  hfldiff_montecarlo->Fill(fl_values_montecarlo.at(i)-fl_values_analytic.at(i));
+	  hs3diff_montecarlo->Fill(s3_values_montecarlo.at(i)-s3_values_analytic.at(i));
+	  hs4diff_montecarlo->Fill(s4_values_montecarlo.at(i)-s4_values_analytic.at(i));
+	  hs5diff_montecarlo->Fill(s5_values_montecarlo.at(i)-s5_values_analytic.at(i));
+	  hafbdiff_montecarlo->Fill(afb_values_montecarlo.at(i)-afb_values_analytic.at(i));
+	  hs7diff_montecarlo->Fill(s7_values_montecarlo.at(i)-s7_values_analytic.at(i));
+	  hs8diff_montecarlo->Fill(s8_values_montecarlo.at(i)-s8_values_analytic.at(i));
+	  hs9diff_montecarlo->Fill(s9_values_montecarlo.at(i)-s9_values_analytic.at(i));
+	  
+	  
 	}
 
       TCanvas* c0_ = new TCanvas("c0", "c0", 3*800, 3*600);
@@ -1827,6 +1893,8 @@ int main()
       hfldiff_onnx_bce_grad->Draw("histsame");
       hfldiff_onnx_msemodified->Draw("histsame");
       hfldiff_onnx_msemodified_grad->Draw("histsame");
+
+      hfldiff_montecarlo->Draw("histsame");
       leg->Draw();
       c1_->cd(1)->Print("diffs_kstarmumu_fl_full.eps", "eps");
       c1_->cd(1)->Print("diffs_kstarmumu_fl_full.root", "root");
@@ -1887,6 +1955,8 @@ int main()
       hs3diff_onnx_bce_grad->Draw("histsame");
       hs3diff_onnx_msemodified->Draw("histsame");
       hs3diff_onnx_msemodified_grad->Draw("histsame");
+
+      hs3diff_montecarlo->Draw("histsame");
       c1_->cd(2)->Print("diffs_kstarmumu_s3_full.eps", "eps");
       c1_->cd(2)->Print("diffs_kstarmumu_s3_full.root", "root");
       
@@ -1946,6 +2016,8 @@ int main()
       hs4diff_onnx_bce_grad->Draw("histsame");
       hs4diff_onnx_msemodified->Draw("histsame");
       hs4diff_onnx_msemodified_grad->Draw("histsame");
+      
+      hs4diff_montecarlo->Draw("histsame");
       c1_->cd(3)->Print("diffs_kstarmumu_s4_full.eps", "eps");
       c1_->cd(3)->Print("diffs_kstarmumu_s4_full.root", "root");
 
@@ -2005,6 +2077,8 @@ int main()
       hs5diff_onnx_bce_grad->Draw("histsame");
       hs5diff_onnx_msemodified->Draw("histsame");
       hs5diff_onnx_msemodified_grad->Draw("histsame");
+
+      hs5diff_montecarlo->Draw("histsame");
       c1_->cd(4)->Print("diffs_kstarmumu_s5_full.eps", "eps");
       c1_->cd(4)->Print("diffs_kstarmumu_s5_full.root", "root");
       
@@ -2064,6 +2138,8 @@ int main()
       hafbdiff_onnx_bce_grad->Draw("histsame");
       hafbdiff_onnx_msemodified->Draw("histsame");
       hafbdiff_onnx_msemodified_grad->Draw("histsame");
+
+      hafbdiff_montecarlo->Draw("histsame");
       leg->Draw();
       c1_->cd(5)->Print("diffs_kstarmumu_afb_full.eps", "eps");
       c1_->cd(5)->Print("diffs_kstarmumu_afb_full.root", "root");
@@ -2124,6 +2200,7 @@ int main()
       hs7diff_onnx_bce_grad->Draw("histsame");
       hs7diff_onnx_msemodified->Draw("histsame");
       hs7diff_onnx_msemodified_grad->Draw("histsame");
+      hs7diff_montecarlo->Draw("histsame");
       c1_->cd(6)->Print("diffs_kstarmumu_s7_full.eps", "eps");
       c1_->cd(6)->Print("diffs_kstarmumu_s7_full.root", "root");
       
@@ -2183,6 +2260,7 @@ int main()
       hs8diff_onnx_bce_grad->Draw("histsame");
       hs8diff_onnx_msemodified->Draw("histsame");
       hs8diff_onnx_msemodified_grad->Draw("histsame");
+      hs8diff_montecarlo->Draw("histsame");
       c1_->cd(7)->Print("diffs_kstarmumu_s8_full.eps", "eps");
       c1_->cd(7)->Print("diffs_kstarmumu_s8_full.root", "root");
 
@@ -2242,6 +2320,7 @@ int main()
       hs9diff_onnx_bce_grad->Draw("histsame");
       hs9diff_onnx_msemodified->Draw("histsame");
       hs9diff_onnx_msemodified_grad->Draw("histsame");
+      hs9diff_montecarlo->Draw("histsame");
       c1_->cd(8)->Print("diffs_kstarmumu_s9_full.eps", "eps");
       c1_->cd(8)->Print("diffs_kstarmumu_s9_full.root", "root");
       
@@ -2355,6 +2434,7 @@ int main()
       hfldiff_onnx_bce_grad->Draw("histsame");
       //hfldiff_onnx_msemodified->Draw("histsame");
       hfldiff_onnx_msemodified_grad->Draw("histsame");
+      hfldiff_montecarlo->Draw("histsame");
       leg2->Draw();
       c2_->cd(1)->Print("diffs_kstarmumu_fl.eps", "eps");
       c2_->cd(1)->Print("diffs_kstarmumu_fl.root", "root");
@@ -2375,6 +2455,7 @@ int main()
       hs3diff_onnx_bce_grad->Draw("histsame");
       //hs3diff_onnx_msemodified->Draw("histsame");
       hs3diff_onnx_msemodified_grad->Draw("histsame");
+      hs3diff_montecarlo->Draw("histsame");
       c2_->cd(2)->Print("diffs_kstarmumu_s3.eps", "eps");
       c2_->cd(2)->Print("diffs_kstarmumu_s3.root", "root");
       
@@ -2393,6 +2474,7 @@ int main()
       hs4diff_onnx_bce_grad->Draw("histsame");
       //hs4diff_onnx_msemodified->Draw("histsame");
       hs4diff_onnx_msemodified_grad->Draw("histsame");
+      hs4diff_montecarlo->Draw("histsame");
       c2_->cd(3)->Print("diffs_kstarmumu_s4.eps", "eps");
       c2_->cd(3)->Print("diffs_kstarmumu_s4.root", "root");
 
@@ -2411,6 +2493,7 @@ int main()
       hs5diff_onnx_bce_grad->Draw("histsame");
       //hs5diff_onnx_msemodified->Draw("histsame");
       hs5diff_onnx_msemodified_grad->Draw("histsame");
+      hs5diff_montecarlo->Draw("histsame");
       c2_->cd(4)->Print("diffs_kstarmumu_s5.eps", "eps");
       c2_->cd(4)->Print("diffs_kstarmumu_s5.root", "root");
       
@@ -2429,6 +2512,7 @@ int main()
       hafbdiff_onnx_bce_grad->Draw("histsame");
       //hafbdiff_onnx_msemodified->Draw("histsame");
       hafbdiff_onnx_msemodified_grad->Draw("histsame");
+      hafbdiff_montecarlo->Draw("histsame");
       leg2->Draw();
       c2_->cd(5)->Print("diffs_kstarmumu_afb.eps", "eps");
       c2_->cd(5)->Print("diffs_kstarmumu_afb.root", "root");
@@ -2448,6 +2532,7 @@ int main()
       hs7diff_onnx_bce_grad->Draw("histsame");
       //hs7diff_onnx_msemodified->Draw("histsame");
       hs7diff_onnx_msemodified_grad->Draw("histsame");
+      hs7diff_montecarlo->Draw("histsame");
       c2_->cd(6)->Print("diffs_kstarmumu_s7.eps", "eps");
       c2_->cd(6)->Print("diffs_kstarmumu_s7.root", "root");
       
@@ -2466,6 +2551,7 @@ int main()
       hs8diff_onnx_bce_grad->Draw("histsame");
       //hs8diff_onnx_msemodified->Draw("histsame");
       hs8diff_onnx_msemodified_grad->Draw("histsame");
+      hs8diff_montecarlo->Draw("histsame");
       c2_->cd(7)->Print("diffs_kstarmumu_s8.eps", "eps");
       c2_->cd(7)->Print("diffs_kstarmumu_s8.root", "root");
 
@@ -2484,6 +2570,7 @@ int main()
       hs9diff_onnx_bce_grad->Draw("histsame");
       //hs9diff_onnx_msemodified->Draw("histsame");
       hs9diff_onnx_msemodified_grad->Draw("histsame");
+      hs9diff_montecarlo->Draw("histsame");
       c2_->cd(8)->Print("diffs_kstarmumu_s9.eps", "eps");
       c2_->cd(8)->Print("diffs_kstarmumu_s9.root", "root");
       

@@ -57,7 +57,7 @@ namespace morefit {
     std::string eff_nn_filename_{""};
     std::string norm_nn_filename_{""};
   public:
-    void prepare_monte_carlo(EventVector<kernelT, evalT>& montecarlo_vector, int nsamples)
+    void prepare_monte_carlo(EventVector<kernelT, evalT>& montecarlo_vector, RandomGenerator* rnd, int nsamples)
     {
       //std::vector<dimension<evalT>> montecarlo_dims_;
       montecarlo_dims_.clear();
@@ -73,11 +73,11 @@ namespace morefit {
       montecarlo_vector.add_dimensions(arg);
 
       montecarlo_vector.resize(nsamples);
-      uint64_t seed[4] = {uint64_t(987364), uint64_t(1354987), uint64_t(2680409), uint64_t(826521243)}; 
-      Xoshiro256pp rnd(seed);//TODO move this to central
+      //uint64_t seed[4] = {uint64_t(987364), uint64_t(1354987), uint64_t(2680409), uint64_t(826521243)}; 
+      //Xoshiro256pp rnd(seed);//TODO move this to central
       for (unsigned j=0; j<nsamples; j++)
 	for (unsigned int i=0; i<this->dimensions_.size(); i++)
-	  montecarlo_vector.operator()(j, i) = rnd.random()*(this->dimensions_.at(i)->get_max()-this->dimensions_.at(i)->get_min())+this->dimensions_.at(i)->get_min();//initialisation
+	  montecarlo_vector.operator()(j, i) = rnd->random()*(this->dimensions_.at(i)->get_max()-this->dimensions_.at(i)->get_min())+this->dimensions_.at(i)->get_min();//initialisation
       montecarlo_vector_ = &montecarlo_vector;
       montecarlo_type_ = montecarlo_type::flat;
     }
