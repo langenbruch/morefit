@@ -884,26 +884,14 @@ int main()
 	  morefit::KstarmumuAngularPDFAnalyticEps<kernelT, evalT> kstarmumu_analytic(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 
 	  morefit::KstarmumuAngularPDFMonteCarloInt<kernelT, evalT> kstarmumu_montecarlo(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
-	  morefit::EventVector<kernelT, evalT> montecarlo_vector;//do not init here TODO
+	  morefit::EventVector<kernelT, evalT> montecarlo_vector;
 	  kstarmumu_montecarlo.prepare_monte_carlo(montecarlo_vector, &rnd, nmcstats);
 	  //montecarlo_vector.print();
-	  
-	  /*
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_groundtruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_direct(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_direct_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_mse(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_mse_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bce(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bce_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_msemodified(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_msemodified_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_msemodified_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_msemodified_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_bdt_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_efficiencytruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx").c_str());
-	  morefit::KstarmumuAngularPDFOnnxEps<kernelT, evalT> kstarmumu_onnx_efficiencytruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9, ("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx").c_str());
-	  */
+
+	  // morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_montecarlo_mse(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
+	  // kstarmumu_montecarlo_mse.set_eff_nn("weights/mlp_direct_accvsrej_mse_kstarmumu_"+std::to_string(m)+".onnx");
+	  // morefit::EventVector<kernelT, evalT> montecarlo_vector_mse;
+	  // kstarmumu_montecarlo_mse.prepare_monte_carlo(montecarlo_vector_mse, &rnd, nmcstats);
 	  
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_groundtruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_groundtruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
@@ -920,20 +908,20 @@ int main()
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_efficiencytruth(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_onnx_efficiencytruth_grad(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 
-	  kstarmumu_onnx_groundtruth.set_acceptance_nn("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_groundtruth_grad.set_acceptance_nn("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_direct.set_acceptance_nn("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_direct_grad.set_acceptance_nn("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_mse.set_acceptance_nn("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_mse_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_bce.set_acceptance_nn("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_bce_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_msemodified.set_acceptance_nn("weights/torch_model_3D_efficiency_msemodified_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_msemodified_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_bdt.set_acceptance_nn("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_bdt_grad.set_acceptance_nn("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_efficiencytruth.set_acceptance_nn("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx");
-	  kstarmumu_onnx_efficiencytruth_grad.set_acceptance_nn("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_groundtruth.set_norm_nn("weights/torch_model_3D_groundtruth_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_groundtruth_grad.set_norm_nn("weights/torch_model_3D_groundtruth_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_direct.set_norm_nn("weights/torch_model_3D_direct_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_direct_grad.set_norm_nn("weights/torch_model_3D_direct_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_mse.set_norm_nn("weights/torch_model_3D_efficiency_mse_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_mse_grad.set_norm_nn("weights/torch_model_3D_efficiency_mse_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bce.set_norm_nn("weights/torch_model_3D_efficiency_bce_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bce_grad.set_norm_nn("weights/torch_model_3D_efficiency_bce_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_msemodified.set_norm_nn("weights/torch_model_3D_efficiency_msemodified_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_msemodified_grad.set_norm_nn("weights/torch_model_3D_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bdt.set_norm_nn("weights/torch_model_3D_bdt_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_bdt_grad.set_norm_nn("weights/torch_model_3D_bdt_grad_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_efficiencytruth.set_norm_nn("weights/torch_model_3D_efficiency_truth_"+std::to_string(m)+".onnx");
+	  kstarmumu_onnx_efficiencytruth_grad.set_norm_nn("weights/torch_model_3D_efficiency_truth_grad_"+std::to_string(m)+".onnx");
 
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
 	  morefit::KstarmumuAngularPDF<kernelT, evalT> kstarmumu_bdt_modified(&ctl, &ctk, &phi, &Fl, &S3, &S4, &S5, &Afb, &S7, &S8, &S9);
@@ -1015,6 +1003,7 @@ int main()
 	  opts.optimize_dimensions = true;
 	  opts.optimize_parameters = true;
 
+	  opts.parallelize_loops = true;
 	  opts.print();
 	  morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
 	  //fit.fit(&kstarmumu_analytic, params, &result);//TODO FIXME
@@ -1362,7 +1351,6 @@ int main()
 	      s7_values_montecarlo.at(m*nruns+i) = S7.get_value();
 	      s8_values_montecarlo.at(m*nruns+i) = S8.get_value();
 	      s9_values_montecarlo.at(m*nruns+i) = S9.get_value();
-
 
 	      Fl.init("Fl", "F_{\\mathrm{L}}", startfl, 0.0, 1.0, 0.01, false);
 	      S3.init("S3", "S_{3}", starts3, -1.0, 1.0, 0.01, false);
@@ -2434,7 +2422,7 @@ int main()
       hfldiff_onnx_bce_grad->Draw("histsame");
       //hfldiff_onnx_msemodified->Draw("histsame");
       hfldiff_onnx_msemodified_grad->Draw("histsame");
-      hfldiff_montecarlo->Draw("histsame");
+      //hfldiff_montecarlo->Draw("histsame");
       leg2->Draw();
       c2_->cd(1)->Print("diffs_kstarmumu_fl.eps", "eps");
       c2_->cd(1)->Print("diffs_kstarmumu_fl.root", "root");
@@ -2455,7 +2443,7 @@ int main()
       hs3diff_onnx_bce_grad->Draw("histsame");
       //hs3diff_onnx_msemodified->Draw("histsame");
       hs3diff_onnx_msemodified_grad->Draw("histsame");
-      hs3diff_montecarlo->Draw("histsame");
+      //hs3diff_montecarlo->Draw("histsame");
       c2_->cd(2)->Print("diffs_kstarmumu_s3.eps", "eps");
       c2_->cd(2)->Print("diffs_kstarmumu_s3.root", "root");
       
@@ -2474,7 +2462,7 @@ int main()
       hs4diff_onnx_bce_grad->Draw("histsame");
       //hs4diff_onnx_msemodified->Draw("histsame");
       hs4diff_onnx_msemodified_grad->Draw("histsame");
-      hs4diff_montecarlo->Draw("histsame");
+      //hs4diff_montecarlo->Draw("histsame");
       c2_->cd(3)->Print("diffs_kstarmumu_s4.eps", "eps");
       c2_->cd(3)->Print("diffs_kstarmumu_s4.root", "root");
 
@@ -2493,7 +2481,7 @@ int main()
       hs5diff_onnx_bce_grad->Draw("histsame");
       //hs5diff_onnx_msemodified->Draw("histsame");
       hs5diff_onnx_msemodified_grad->Draw("histsame");
-      hs5diff_montecarlo->Draw("histsame");
+      //hs5diff_montecarlo->Draw("histsame");
       c2_->cd(4)->Print("diffs_kstarmumu_s5.eps", "eps");
       c2_->cd(4)->Print("diffs_kstarmumu_s5.root", "root");
       
@@ -2512,7 +2500,7 @@ int main()
       hafbdiff_onnx_bce_grad->Draw("histsame");
       //hafbdiff_onnx_msemodified->Draw("histsame");
       hafbdiff_onnx_msemodified_grad->Draw("histsame");
-      hafbdiff_montecarlo->Draw("histsame");
+      //hafbdiff_montecarlo->Draw("histsame");
       leg2->Draw();
       c2_->cd(5)->Print("diffs_kstarmumu_afb.eps", "eps");
       c2_->cd(5)->Print("diffs_kstarmumu_afb.root", "root");
@@ -2532,7 +2520,7 @@ int main()
       hs7diff_onnx_bce_grad->Draw("histsame");
       //hs7diff_onnx_msemodified->Draw("histsame");
       hs7diff_onnx_msemodified_grad->Draw("histsame");
-      hs7diff_montecarlo->Draw("histsame");
+      //hs7diff_montecarlo->Draw("histsame");
       c2_->cd(6)->Print("diffs_kstarmumu_s7.eps", "eps");
       c2_->cd(6)->Print("diffs_kstarmumu_s7.root", "root");
       
@@ -2551,7 +2539,7 @@ int main()
       hs8diff_onnx_bce_grad->Draw("histsame");
       //hs8diff_onnx_msemodified->Draw("histsame");
       hs8diff_onnx_msemodified_grad->Draw("histsame");
-      hs8diff_montecarlo->Draw("histsame");
+      //hs8diff_montecarlo->Draw("histsame");
       c2_->cd(7)->Print("diffs_kstarmumu_s8.eps", "eps");
       c2_->cd(7)->Print("diffs_kstarmumu_s8.root", "root");
 
@@ -2570,7 +2558,7 @@ int main()
       hs9diff_onnx_bce_grad->Draw("histsame");
       //hs9diff_onnx_msemodified->Draw("histsame");
       hs9diff_onnx_msemodified_grad->Draw("histsame");
-      hs9diff_montecarlo->Draw("histsame");
+      //hs9diff_montecarlo->Draw("histsame");
       c2_->cd(8)->Print("diffs_kstarmumu_s9.eps", "eps");
       c2_->cd(8)->Print("diffs_kstarmumu_s9.root", "root");
       

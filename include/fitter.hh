@@ -240,6 +240,10 @@ namespace morefit {
     static fitter<kernelT, evalT, backendT, computeT>* global_fitter_pointer;
     //temporary, to be moved to compute_block class
     int precompute_output_dimensions_{0};
+    //timing counters
+    double summed_lh_time{0.0};
+    double summed_paramcalc_time{0.0};
+    unsigned int lh_calls{0};
 #ifdef WITH_ROOT
     //minuit one fitter object (available only if linked against root)
     TMinuit* minuit_one;
@@ -759,6 +763,9 @@ namespace morefit {
     {      
       auto t_before_fit = std::chrono::high_resolution_clock::now();
       global_fitter_pointer = this;
+      summed_lh_time = 0.0;
+      summed_paramcalc_time = 0.0;
+      lh_calls = 0;
 
       //save pointers to arguments, needed for external likelihood calculation
       pdf_ = pdf;
@@ -802,7 +809,8 @@ namespace morefit {
       //make the kernel only if necessary 
       if (!refit)
 	make_kernels(pdf, params, data, other_data);
-
+      auto t_after_kernel = std::chrono::high_resolution_clock::now();
+      
       //copy actual data
       if (opts_->optimize_dimensions)
 	{
@@ -1153,7 +1161,11 @@ namespace morefit {
 	std::cout << "fit procedure finished" << std::endl;
       auto t_after_fit = std::chrono::high_resolution_clock::now();
       if (opts_->print_level > 1)
-	std::cout << "fit of " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_fit-t_before_fit).count() << " ms in total" << std::endl;
+	{
+	  std::cout << "fit of " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_fit-t_before_fit).count() << " ms in total" << std::endl;
+	  std::cout << "excluding kernel compilation fit of " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_fit-t_after_kernel).count() << " ms in total" << std::endl;
+	  std::cout << "on average the full lh calls take " << summed_lh_time/lh_calls << " ms, average parameter calculation takes " << summed_paramcalc_time/lh_calls << " ms and likelihood excluding parameters " << (summed_lh_time - summed_paramcalc_time)/lh_calls << "ms (" << lh_calls << " total calls)" << std::endl;
+	}
       return true;
     }
     //compute likelihood at current point
@@ -1388,6 +1400,12 @@ namespace morefit {
       auto t_after_lh = std::chrono::high_resolution_clock::now();
       if (opts_->print_level > 1)
 	std::cout << "lh determination of " << data->nevents() << " events took " << std::chrono::duration<double, std::milli>(t_after_lh-t_before_lh).count() << " ms in total" << std::endl;
+      if (opts_->print_level > 1)
+	{
+	  summed_lh_time += std::chrono::duration<double, std::milli>(t_after_lh-t_before_lh).count();
+	  summed_paramcalc_time += std::chrono::duration<double, std::milli>(t_after_paramcalc-t_before_paramcalc).count();
+	  lh_calls += 1;
+	}
       auto t_before_kahan = std::chrono::high_resolution_clock::now();
       evalT result = 0.0;
       std::vector<evalT> kahan_sum(1);

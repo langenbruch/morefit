@@ -142,7 +142,7 @@ int main()
   morefit::compute_options compute_opts;
   compute_opts.opencl_platform = 0; compute_opts.opencl_device = 0;  
   compute_opts.llvm_nthreads = 1;
-  compute_opts.print_kernel = false;
+  compute_opts.print_kernel = true;
   compute_opts.llvm_print_intermediate = false;
   //compute_opts.llvm_vectorization = false;
 
@@ -497,6 +497,8 @@ int main()
       
       //toy study
       unsigned int nruns = 20;
+      //nruns = 1;
+      
       double dx = 0.25;
       double dxdiff = 0.25;
       unsigned int nbins = 80;
@@ -604,26 +606,26 @@ int main()
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_efficiencytruth(&x, &c1, &c2);
 	  morefit::QuadraticPDFNormalised<kernelT, evalT> quadratic_onnx_efficiencytruth_grad(&x, &c1, &c2);
 	  
-	  quadratic_onnx_groundtruth.set_acceptance_nn("weights/torch_model_groundtruth_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_groundtruth_grad.set_acceptance_nn("weights/torch_model_groundtruth_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_groundtruth.set_norm_nn("weights/torch_model_groundtruth_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_groundtruth_grad.set_norm_nn("weights/torch_model_groundtruth_grad_"+std::to_string(m)+".onnx");
 	  
-	  quadratic_onnx_direct.set_acceptance_nn("weights/torch_model_direct_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_direct_grad.set_acceptance_nn("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_direct.set_norm_nn("weights/torch_model_direct_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_direct_grad.set_norm_nn("weights/torch_model_direct_grad_"+std::to_string(m)+".onnx");
 
-	  quadratic_onnx_mse.set_acceptance_nn("weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_mse_grad.set_acceptance_nn("weights/torch_model_efficiency_mse_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_mse.set_norm_nn("weights/torch_model_efficiency_mse_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_mse_grad.set_norm_nn("weights/torch_model_efficiency_mse_grad_"+std::to_string(m)+".onnx");
 
-	  quadratic_onnx_bce.set_acceptance_nn("weights/torch_model_efficiency_bce_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_bce_grad.set_acceptance_nn("weights/torch_model_efficiency_bce_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bce.set_norm_nn("weights/torch_model_efficiency_bce_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bce_grad.set_norm_nn("weights/torch_model_efficiency_bce_grad_"+std::to_string(m)+".onnx");
 
-	  quadratic_onnx_msemodified.set_acceptance_nn("weights/torch_model_efficiency_msemodified_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_msemodified_grad.set_acceptance_nn("weights/torch_model_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_msemodified.set_norm_nn("weights/torch_model_efficiency_msemodified_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_msemodified_grad.set_norm_nn("weights/torch_model_efficiency_msemodified_grad_"+std::to_string(m)+".onnx");
 	  
-	  quadratic_onnx_bdt.set_acceptance_nn("weights/torch_model_bdt_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_bdt_grad.set_acceptance_nn("weights/torch_model_bdt_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bdt.set_norm_nn("weights/torch_model_bdt_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_bdt_grad.set_norm_nn("weights/torch_model_bdt_grad_"+std::to_string(m)+".onnx");
 
-	  quadratic_onnx_efficiencytruth.set_acceptance_nn("weights/torch_model_efficiency_truth_"+std::to_string(m)+".onnx");
-	  quadratic_onnx_efficiencytruth_grad.set_acceptance_nn("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_efficiencytruth.set_norm_nn("weights/torch_model_efficiency_truth_"+std::to_string(m)+".onnx");
+	  quadratic_onnx_efficiencytruth_grad.set_norm_nn("weights/torch_model_efficiency_truth_grad_"+std::to_string(m)+".onnx");
 
 	  morefit::EventVector<kernelT, evalT> eff;
 	  morefit::EventVector<kernelT, evalT> eff_modified;
@@ -675,6 +677,10 @@ int main()
 	  opts.analytic_gradient = false;
 	  opts.analytic_hessian = false;
 	  opts.print_level = -1;
+	  opts.print_level = 2;
+	  opts.parallelize_loops = true;
+	  opts.optimize_dimensions = true;
+	  
 	  opts.print();
 	  morefit::fitter<kernelT, evalT, backendT, blockT > fit(&opts, &backend);
 
@@ -1372,7 +1378,7 @@ int main()
       hc1diff_onnx_msemodified_grad->Draw("histsame");      
       hc1diff_bdt_modified->Draw("histsame");
       hc1diff_bdt->Draw("histsame");
-      hc1diff_montecarlo->Draw("histsame");
+      //hc1diff_montecarlo->Draw("histsame");
 
       TLegend* leg3 = new TLegend(0.6, 0.5, 0.95, 0.95);
       //leg3->AddEntry(hc1diff_onnx_groundtruth,"ONNX groundtruth","l");
@@ -1409,7 +1415,7 @@ int main()
       hc2diff_onnx_msemodified_grad->Draw("histsame");      
       hc2diff_bdt_modified->Draw("histsame");
       hc2diff_bdt->Draw("histsame");
-      hc2diff_montecarlo->Draw("histsame");
+      //hc2diff_montecarlo->Draw("histsame");
 
       leg3->Draw();
       c2_->cd(2)->Print("diffs_c2.eps", "eps");
